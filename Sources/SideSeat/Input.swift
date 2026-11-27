@@ -7,6 +7,12 @@ public protocol SideSeatTappable: AnyObject {
     func sideSeatTap(at point: CGPoint) -> Bool
 }
 
+/// Adopt on rows with swipe actions, for example SwipeCellKit cells. A sideways agent scroll over the row calls it.
+public protocol SideSeatSwipeable: AnyObject {
+    /// `delta` is in points; positive `dx` is a swipe to the right. Return false when there is nothing to reveal.
+    func sideSeatSwipe(by delta: CGVector) -> Bool
+}
+
 public extension View {
     /// Lets the agent trigger `action` by tapping this view. Use it on SwiftUI views driven by gestures.
     func sideSeatTarget(_ action: @escaping () -> Void) -> some View {
@@ -443,10 +449,23 @@ final class InputDispatcher {
     private func scroll(at point: CGPoint, by delta: CGVector) -> InputResult {
         guard let hit = hit(at: point) else { return .nothing("noScrollView") }
         let vertical = abs(delta.dy) >= abs(delta.dx)
-        let ancestors = sequence(first: hit.view, next: \.superview).compactMap { $0 as? UIScrollView }.filter(\.isScrollEnabled)
-        let candidates = Self.scrollViews(at: hit.point, under: hit.view, in: hit.window) + ancestors
-        guard let target = candidates.first(where: { $0.canScroll(vertically: vertical) }) ?? candidates.first else { return .nothing("noScrollView") }
-        return move(target, by: delta)
+        let chain = Array(sequence(first: hit.view, next: \.superview))
+        let below = Self.scrollViews(at: hit.point, under: hit.view, in: hit.window)
+        let ancestors = chain.compactMap { $0 as? UIScrollView }.filter(\.isScrollEnabled)
+        var declinedSwipe = false
+        if !vertical, let index = chain.firstIndex(where: { $0 is SideSeatSwipeable }), let swipeable = chain[index] as? SideSeatSwipeable {
+            let inside = below + chain[..<index].compactMap { $0 as? UIScrollView }.filter(\.isScrollEnabled)
+            if !inside.contains(where: { $0.canScroll(vertically: false) }) {
+                if swipeable.sideSeatSwipe(by: delta) { return .performed }
+                declinedSwipe = true
+            }
+        }
+        let candidates = below + ancestors
+        guard let target = candidates.first(where: { $0.canScroll(vertically: vertical) }) ?? candidates.first else {
+            return .nothing(declinedSwipe ? "noSwipeActions" : "noScrollView")
+        }
+        let result = move(target, by: delta)
+        return declinedSwipe && result.outcome != .performed ? .nothing("noSwipeActions") : result
     }
 
     private static func scrollViews(at point: CGPoint, under view: UIView, in window: UIWindow) -> [UIScrollView] {

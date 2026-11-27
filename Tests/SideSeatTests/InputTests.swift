@@ -39,6 +39,15 @@ private final class TappableView: UIView, SideSeatTappable {
     }
 }
 
+private final class SwipeableView: UIView, SideSeatSwipeable {
+    var answer = true
+    var deltas: [CGVector] = []
+    func sideSeatSwipe(by delta: CGVector) -> Bool {
+        deltas.append(delta)
+        return answer
+    }
+}
+
 private final class KeyInputView: UIView, UIKeyInput {
     var typed = ""
     var hasText: Bool { !typed.isEmpty }
@@ -260,6 +269,63 @@ private final class InstantPopNavigation: UINavigationController {
         #expect(d.perform(.scroll(x: 0.5, y: 0.5, dx: 0, dy: -5)) == .performed)
         #expect(outer.contentOffset.y == 0)
         #expect(d.perform(.scroll(x: 0.5, y: 0.5, dx: 0, dy: -1)) == .nothing("atEdge"))
+    }
+
+    @Test func sidewaysScrollSwipesTheRowUnderThePointAndUpDownStillScrolls() {
+        let w = window()
+        let list = UIScrollView(frame: scene)
+        list.contentSize = CGSize(width: 1000, height: 2000)
+        list.contentInsetAdjustmentBehavior = .never
+        let row = SwipeableView(frame: CGRect(x: 0, y: 0, width: 1000, height: 100))
+        row.addSubview(UIView(frame: CGRect(x: 0, y: 0, width: 200, height: 100)))
+        list.addSubview(row)
+        w.addSubview(list)
+        let d = dispatcher([w])
+
+        #expect(d.perform(.scroll(x: 0.1, y: 0.1, dx: 0.3, dy: 0.05)) == .performed)
+        #expect(row.deltas == [CGVector(dx: 300, dy: 25)])
+        #expect(list.contentOffset == .zero)
+
+        row.answer = false
+        #expect(d.perform(.scroll(x: 0.1, y: 0.1, dx: -0.3, dy: 0)) == .nothing("noSwipeActions"))
+
+        #expect(d.perform(.scroll(x: 0.1, y: 0.1, dx: 0, dy: 0.2)) == .performed)
+        #expect(row.deltas.count == 2)
+        #expect(list.contentOffset.y == 100)
+    }
+
+    @Test func aSidewaysScrollerInsideTheRowScrollsInsteadOfSwiping() {
+        let w = window()
+        let row = SwipeableView(frame: CGRect(x: 0, y: 0, width: 1000, height: 100))
+        let strip = UIScrollView(frame: CGRect(x: 0, y: 0, width: 500, height: 100))
+        strip.contentSize = CGSize(width: 2000, height: 100)
+        strip.addSubview(UIView(frame: CGRect(x: 0, y: 0, width: 2000, height: 100)))
+        row.addSubview(strip)
+        w.addSubview(row)
+        let d = dispatcher([w])
+
+        #expect(d.perform(.scroll(x: 0.1, y: 0.1, dx: 0.3, dy: 0)) == .performed)
+        #expect(strip.contentOffset.x == 300)
+        #expect(row.deltas.isEmpty)
+
+        #expect(d.perform(.scroll(x: 0.8, y: 0.1, dx: 0.3, dy: 0)) == .performed)
+        #expect(row.deltas.count == 1)
+    }
+
+    @Test func aDeclinedSwipeFallsBackToScrollingSideways() {
+        let w = window()
+        let pager = UIScrollView(frame: scene)
+        pager.contentSize = CGSize(width: 3000, height: 500)
+        pager.contentInsetAdjustmentBehavior = .never
+        let row = SwipeableView(frame: CGRect(x: 0, y: 0, width: 1000, height: 100))
+        row.answer = false
+        pager.addSubview(row)
+        w.addSubview(pager)
+        let d = dispatcher([w])
+
+        #expect(d.perform(.scroll(x: 0.1, y: 0.1, dx: 0.3, dy: 0)) == .performed)
+        #expect(row.deltas.count == 1)
+        #expect(pager.contentOffset.x == 300)
     }
 
     @Test func scrollFindsScrollViewsBelowViewsThatSwallowHitTesting() {
