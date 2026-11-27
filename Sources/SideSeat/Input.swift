@@ -637,7 +637,7 @@ private extension UIView {
 }
 
 private extension UIControl {
-    /// SwiftUI's own controls ignore UIKit actions, so tapping them would report a false success.
+    /// Controls whose only targets are SwiftUI's own report `swiftUIControl` instead of being fired; mark them with `.sideSeatTarget`.
     var isManagedBySwiftUI: Bool {
         // Read through KVC: bridging `allTargets` to Swift crashes on targets that aren't NSObjects.
         guard let targets = value(forKey: "allTargets") as? NSSet, targets.count > 0 else { return false }

@@ -86,7 +86,7 @@ SideSeat.shared.start(in: windowScene, configuration: configuration)
 
 The system keyboard runs outside your app, so the agent sees a drawn keyboard in its place and can tap its keys. It is blurred and locked while a password or masked field has focus.
 
-Things it can't drive, by design: plain gesture recognizers, web views, games, and SwiftUI gestures without a marker. Make them reachable with:
+Things it can't drive, by design: plain gesture recognizers, web views, games, and SwiftUI gestures and controls (`Toggle`, `Slider`, `Picker`) without a marker. A tap on an unmarked SwiftUI control reports `swiftUIControl` rather than a false success. Make them reachable with:
 
 ```swift
 // UIKit: views driven by taps
@@ -110,7 +110,8 @@ extension MyRowCell: SideSeatSwipeable {
 
 // SwiftUI
 Card().sideSeatTapGesture { likes += 1 }   // instead of .onTapGesture
-Form { … }.sideSeatButton()                // makes the buttons inside pressable
+Button("Pay") { pay() }.sideSeatButton()   // keeps the button's style
+Toggle("Done", isOn: $done).sideSeatTarget { done.toggle() }
 ```
 
 ## Ask before sensitive actions
