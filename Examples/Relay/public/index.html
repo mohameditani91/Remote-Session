@@ -96,9 +96,9 @@ const reasons = {
   noFocusedField: 'Tap a text field first', cannotFocus: "That field can't be edited", alertOpen: 'An alert is open',
   popoverStaysOpen: 'This popup stays open', backHidden: 'This screen has no Back', nothingToGoBack: 'Nothing to go back to',
   waitingForUser: 'Waiting for the user to answer', keyboard: 'That key is locked', swiftUIControl: "That control can't be tapped remotely",
-  barItemNotFound: 'No bar button there', noKeyboard: 'No keyboard is open', keyboardStays: 'The field kept the keyboard', menu: 'That button opens a menu', noSwipeActions: 'Nothing to swipe there'
+  unsupported: "The app doesn't support that yet", barItemNotFound: 'No bar button there', noKeyboard: 'No keyboard is open', keyboardStays: 'The field kept the keyboard', menu: 'That button opens a menu', noSwipeActions: 'Nothing to swipe there'
 }
-let ws = null, mode = null, seq = 0, scroll = null
+let ws = null, mode = null, seq = 0, scroll = null, asking = null
 const pending = new Map()
 
 function setStatus(text, tone) { $('status').textContent = text; $('status').dataset.tone = tone || '' }
@@ -147,8 +147,11 @@ function connect(code, name) {
     if (message.type === 'consent') { setMode(message.mode); addEvent('User allowed ' + (message.mode === 'control' ? 'control' : 'viewing'), '', 'good') }
     if (message.type === 'mode') { setMode(message.mode); addEvent('User switched to view only', '', 'bad') }
     if (message.type === 'approval') {
-      if (message.allowed === undefined) { setStatus('Waiting for the user', 'warn'); addEvent('Asked the user: ' + message.action, 'Waiting…') }
-      else { setMode(mode); addEvent('User ' + (message.allowed ? 'allowed: ' : 'declined: ') + message.action, '', message.allowed ? 'good' : 'bad') }
+      if (message.allowed === undefined) { setStatus('Waiting for the user', 'warn'); asking = addEvent('Asked the user: ' + message.action, 'Waiting…') }
+      else {
+        setMode(mode)
+        if (asking) { asking.textContent = message.allowed ? 'Allowed' : 'Declined'; asking.dataset.tone = message.allowed ? 'good' : 'bad'; asking = null }
+      }
     }
     if (message.type === 'result') {
       const row = pending.get(message.id); pending.delete(message.id)

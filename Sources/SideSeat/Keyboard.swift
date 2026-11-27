@@ -135,7 +135,7 @@ enum KeyboardPlaceholder {
         let all = keys(in: bounds)
         guard let rowHeight = all.first?.rect.height else { return }
         let attributes: [NSAttributedString.Key: Any] = [.font: UIFont.systemFont(ofSize: rowHeight * 0.4), .foregroundColor: dark ? UIColor.white : UIColor.black]
-        let symbols: [Key: String] = [.delete: "⌫", .enter: "return"]
+        let symbols: [Key: String] = [.delete: "⌫", .enter: "⏎"]
         for entry in all {
             (entry.width > 1 && entry.width < 6 ? special : key).setFill()
             UIBezierPath(roundedRect: entry.rect, cornerRadius: rowHeight * 0.12).fill()

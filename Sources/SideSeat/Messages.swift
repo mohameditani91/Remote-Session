@@ -70,6 +70,8 @@ enum IncomingMessage: Equatable {
     case agentJoined(Agent)
     case agentLeft
     case input(id: String, RemoteInput)
+    /// An input this version doesn't know, from a newer console.
+    case unsupportedInput(id: String)
     case end(EndReason)
 }
 
@@ -110,6 +112,7 @@ private struct Envelope: Codable {
 
 enum MessageError: Error {
     case malformed
+    case unsupported
 }
 
 extension IncomingMessage {
@@ -127,7 +130,11 @@ extension IncomingMessage {
             self = .agentLeft
         case "input":
             guard let id = envelope.id else { throw MessageError.malformed }
-            self = .input(id: id, try Self.input(from: envelope))
+            do {
+                self = .input(id: id, try Self.input(from: envelope))
+            } catch MessageError.unsupported {
+                self = .unsupportedInput(id: id)
+            }
         case "end":
             self = .end(envelope.reason.flatMap(EndReason.init(rawValue:)) ?? .agentEnded)
         default:
@@ -154,7 +161,7 @@ extension IncomingMessage {
         case "hideKeyboard":
             return .hideKeyboard
         default:
-            throw MessageError.malformed
+            throw MessageError.unsupported
         }
     }
 }

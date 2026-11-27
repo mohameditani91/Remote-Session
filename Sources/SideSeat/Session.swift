@@ -52,6 +52,8 @@ final class Session {
             handled(id, input, .blocked("viewOnly"))
         case (.input(let id, let input), _):
             handled(id, input, .blocked("noConsent"))
+        case (.unsupportedInput(let id), _):
+            send(.result(id: id, .nothing("unsupported")))
         case (.end(let reason), _):
             finish(reason, notify: false)
         default:

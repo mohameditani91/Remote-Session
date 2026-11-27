@@ -79,6 +79,13 @@ final class FakeTransport: SideSeatTransport {
         #expect(reported == [.performed, .blocked("viewOnly")])
     }
 
+    @Test func inputsFromANewerConsoleGetAnAnswer() {
+        let (session, transport) = activeSession(mode: .control)
+        transport.deliver(#"{"type":"input","id":"i9","action":"pinch"}"#)
+        #expect(transport.lastSent == #"{"id":"i9","outcome":"nothing","reason":"unsupported","type":"result"}"#)
+        withExtendedLifetime(session) {}
+    }
+
     @Test func viewOnlyBlocksInputs() {
         let (session, transport) = activeSession(mode: .view)
         session.perform = { _ in Issue.record("must not run"); return .performed }
@@ -160,7 +167,8 @@ final class FakeTransport: SideSeatTransport {
         #expect(try IncomingMessage(json: #"{"type":"input","id":"3","action":"key","key":"backspace"}"#) == .input(id: "3", .key(.backspace)))
         #expect(try IncomingMessage(json: #"{"type":"input","id":"4","action":"text","text":"ab"}"#) == .input(id: "4", .text("ab")))
         #expect(try IncomingMessage(json: #"{"type":"input","id":"5","action":"hideKeyboard"}"#) == .input(id: "5", .hideKeyboard))
-        #expect(throws: MessageError.self) { try IncomingMessage(json: #"{"type":"input","id":"6","action":"swipe"}"#) }
+        #expect(try IncomingMessage(json: #"{"type":"input","id":"6","action":"swipe"}"#) == .unsupportedInput(id: "6"))
+        #expect(throws: MessageError.self) { try IncomingMessage(json: #"{"type":"input","action":"swipe"}"#) }
     }
 
     @Test func framesRateDropsWhenCaptureIsSlowAndRecovers() {
