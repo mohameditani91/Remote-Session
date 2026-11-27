@@ -24,7 +24,7 @@ enum WindowSelection {
 
 enum Compositor {
 
-    static func capture(_ scene: UIWindowScene, scale: CGFloat, maskRule: ((UIView) -> Bool)?) -> CGImage? {
+    static func capture(_ scene: UIWindowScene, scale: CGFloat, maskRule: ((UIView) -> Bool)?, keyboard: CGRect? = nil) -> CGImage? {
         let space = scene.coordinateSpace
         let bounds = space.bounds
         guard bounds.width > 0, bounds.height > 0 else { return nil }
@@ -41,6 +41,10 @@ enum Compositor {
                 for rect in MaskCollector.rects(in: window, rule: maskRule) {
                     context.fill(window.convert(rect, to: space))
                 }
+            }
+            if let keyboard {
+                let sensitive = KeyboardPlaceholder.isSensitive(UIResponder.sideSeatFirstResponder(), rule: maskRule)
+                KeyboardPlaceholder.draw(in: keyboard, dark: scene.traitCollection.userInterfaceStyle == .dark, blurred: sensitive)
             }
         }.cgImage
     }
@@ -105,8 +109,11 @@ final class Streamer {
     private var lastSize: CGSize?
     private var captureSoonWork: DispatchWorkItem?
 
-    init(scene: UIWindowScene, configuration: SideSeat.Configuration, session: Session) {
+    private let keyboard: () -> CGRect?
+
+    init(scene: UIWindowScene, configuration: SideSeat.Configuration, session: Session, keyboard: @escaping () -> CGRect? = { nil }) {
         self.scene = scene
+        self.keyboard = keyboard
         self.configuration = configuration
         self.session = session
         self.policy = FrameRatePolicy(maxFps: configuration.framesPerSecond, budget: configuration.mainThreadBudget)
@@ -152,7 +159,7 @@ final class Streamer {
         }
 
         let started = CACurrentMediaTime()
-        guard let image = Compositor.capture(scene, scale: configuration.scale, maskRule: configuration.maskRule) else { return }
+        guard let image = Compositor.capture(scene, scale: configuration.scale, maskRule: configuration.maskRule, keyboard: keyboard()) else { return }
         if policy.record(CACurrentMediaTime() - started) { schedule() }
 
         inFlight = true

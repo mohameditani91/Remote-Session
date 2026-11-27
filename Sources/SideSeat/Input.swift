@@ -112,11 +112,15 @@ final class InputDispatcher {
     private let windows: () -> [UIWindow]
     private let bounds: () -> CGRect
     private let firstResponder: () -> UIResponder?
+    private let keyboard: () -> CGRect?
+    private let maskRule: ((UIView) -> Bool)?
 
-    init(windows: @escaping () -> [UIWindow], bounds: @escaping () -> CGRect, firstResponder: @escaping () -> UIResponder? = UIResponder.sideSeatFirstResponder) {
+    init(windows: @escaping () -> [UIWindow], bounds: @escaping () -> CGRect, firstResponder: @escaping () -> UIResponder? = UIResponder.sideSeatFirstResponder, keyboard: @escaping () -> CGRect? = { nil }, maskRule: ((UIView) -> Bool)? = nil) {
         self.windows = windows
         self.bounds = bounds
         self.firstResponder = firstResponder
+        self.keyboard = keyboard
+        self.maskRule = maskRule
     }
 
     func perform(_ input: RemoteInput) -> InputResult {
@@ -127,9 +131,7 @@ final class InputDispatcher {
             let size = bounds().size
             return scroll(at: point(x, y), by: CGVector(dx: dx * size.width, dy: dy * size.height))
         case .text(let text):
-            guard let input = firstResponder() as? UIKeyInput else { return .nothing("noFocusedField") }
-            input.insertText(text)
-            return .performed
+            return insert(text)
         case .key(let key):
             return press(key)
         case .back:
@@ -152,6 +154,7 @@ final class InputDispatcher {
     }
 
     private func tap(at point: CGPoint) -> InputResult {
+        if let board = keyboard(), board.contains(point) { return typeKey(at: CGPoint(x: point.x - board.minX, y: point.y - board.minY), on: board.size) }
         guard let hit = hit(at: point) else { return .nothing("noTarget") }
         if let result = closePopover(tappedOn: hit.view, in: hit.window) { return result }
         if let target = Self.target(near: hit.view, at: hit.point, in: hit.window) {
@@ -490,6 +493,23 @@ final class InputDispatcher {
         guard abs(target.x - offset.x) > 0.5 || abs(target.y - offset.y) > 0.5 else { return .nothing("atEdge") }
         scrollView.setContentOffset(target, animated: false)
         return .performed
+    }
+
+    private func insert(_ text: String) -> InputResult {
+        guard let input = firstResponder() as? UIKeyInput else { return .nothing("noFocusedField") }
+        input.insertText(text)
+        return .performed
+    }
+
+    private func typeKey(at point: CGPoint, on size: CGSize) -> InputResult {
+        guard !KeyboardPlaceholder.isSensitive(firstResponder(), rule: maskRule) else { return .nothing("keyboard") }
+        switch KeyboardPlaceholder.key(at: point, size: size) {
+        case .character(let character)?: return insert(character)
+        case .space?: return insert(" ")
+        case .delete?: return press(.backspace)
+        case .enter?: return press(.return)
+        case nil: return .nothing("keyboard")
+        }
     }
 
     private func press(_ key: RemoteKey) -> InputResult {

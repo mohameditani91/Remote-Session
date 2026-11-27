@@ -43,6 +43,7 @@ public final class SideSeat {
     private var session: Session?
     private var streamer: Streamer?
     private var overlay: OverlayWindow?
+    private var keyboard: KeyboardFrame?
 
     public init() {}
 
@@ -50,7 +51,17 @@ public final class SideSeat {
         guard session == nil else { return }
 
         let session = Session(transport: configuration.transport ?? WebSocketTransport(request: configuration.request), allowsControl: configuration.allowsControl)
-        let dispatcher = InputDispatcher(windows: { [weak scene] in scene?.windows ?? [] }, bounds: { [weak scene] in scene?.coordinateSpace.bounds ?? .zero })
+        let keyboard = KeyboardFrame()
+        let keyboardRect = { [weak scene, weak keyboard] () -> CGRect? in
+            guard let scene else { return nil }
+            return keyboard?.rect(in: scene)
+        }
+        let dispatcher = InputDispatcher(
+            windows: { [weak scene] in scene?.windows ?? [] },
+            bounds: { [weak scene] in scene?.coordinateSpace.bounds ?? .zero },
+            keyboard: keyboardRect,
+            maskRule: configuration.maskRule
+        )
         session.perform = { input in configuration.inputInterceptor?(input) ?? dispatcher.perform(input) }
 
         let controller = OverlayViewController(strings: configuration.strings, tint: configuration.tint, allowsControl: configuration.allowsControl, showsConsent: configuration.consentHandler == nil)
@@ -65,7 +76,7 @@ public final class SideSeat {
         window.rootViewController = controller
         window.isHidden = false
 
-        let streamer = Streamer(scene: scene, configuration: configuration, session: session)
+        let streamer = Streamer(scene: scene, configuration: configuration, session: session, keyboard: keyboardRect)
         window.onTouch = { [weak streamer] in streamer?.captureSoon(after: Streamer.userTouchCaptureDelay) }
         session.onInput = { [weak controller, weak streamer] input, result in
             if case .tap(let x, let y) = input, let color = configuration.tapIndicatorColor {
@@ -90,6 +101,7 @@ public final class SideSeat {
         self.session = session
         self.streamer = streamer
         self.overlay = window
+        self.keyboard = keyboard
         controller.render(.connecting)
         streamer.start()
         session.start()
@@ -103,6 +115,7 @@ public final class SideSeat {
         streamer?.stop()
         overlay?.isHidden = true
         overlay = nil
+        keyboard = nil
         streamer = nil
         session = nil
     }

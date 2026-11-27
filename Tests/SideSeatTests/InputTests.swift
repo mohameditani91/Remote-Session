@@ -144,6 +144,53 @@ private final class InstantPopNavigation: UINavigationController {
         #expect(order == ["down", "up"])
     }
 
+    @Test func tapsOnTheKeyboardDoNotReachTheScreenUnderIt() {
+        let w = window()
+        let counter = Counter()
+        let button = UIButton(frame: CGRect(x: 100, y: 300, width: 200, height: 100))
+        button.addAction(counter.action, for: .touchUpInside)
+        w.addSubview(button)
+        let keyboard = CGRect(x: 0, y: 320, width: 1000, height: 180)
+        let d = InputDispatcher(windows: { [w] }, bounds: { [scene] in scene }, firstResponder: { nil }, keyboard: { keyboard })
+
+        #expect(tap(d, 200, 350) == .nothing("noFocusedField"))
+        #expect(counter.count == 0)
+        #expect(tap(d, 200, 310) == .performed)
+        #expect(counter.count == 1)
+    }
+
+    @Test func tapsOnTheDrawnKeyboardTypeIntoTheFocusedField() {
+        let w = window()
+        let field = KeyInputView()
+        let keyboard = CGRect(x: 0, y: 320, width: 1000, height: 180)
+        let d = InputDispatcher(windows: { [w] }, bounds: { [scene] in scene }, firstResponder: { field }, keyboard: { keyboard })
+        let keys = KeyboardPlaceholder.keys(in: CGRect(origin: .zero, size: keyboard.size))
+        let center = { (key: KeyboardPlaceholder.Key) -> CGPoint in
+            let rect = keys.first { $0.key == key }!.rect
+            return CGPoint(x: rect.midX + keyboard.minX, y: rect.midY + keyboard.minY)
+        }
+
+        for key in [KeyboardPlaceholder.Key.character("h"), .character("i"), .space, .character("x"), .delete] {
+            let point = center(key)
+            #expect(tap(d, point.x, point.y) == .performed)
+        }
+
+        #expect(field.typed == "hi ")
+    }
+
+    @Test func thePasswordKeyboardIsNotClickable() {
+        let w = window()
+        let password = UITextField(frame: CGRect(x: 10, y: 10, width: 200, height: 40))
+        password.isSecureTextEntry = true
+        w.addSubview(password)
+        let keyboard = CGRect(x: 0, y: 320, width: 1000, height: 180)
+        let d = InputDispatcher(windows: { [w] }, bounds: { [scene] in scene }, firstResponder: { password }, keyboard: { keyboard })
+        let rect = KeyboardPlaceholder.keys(in: CGRect(origin: .zero, size: keyboard.size)).first { $0.key == .character("a") }!.rect
+
+        #expect(tap(d, rect.midX, rect.midY + keyboard.minY) == .nothing("keyboard"))
+        #expect(password.text?.isEmpty ?? true)
+    }
+
     @Test func switchesSegmentsAndSlidersChangeValue() {
         let w = window()
         let toggle = UISwitch(frame: CGRect(x: 10, y: 10, width: 51, height: 31))
