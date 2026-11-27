@@ -22,6 +22,15 @@ private final class GuardedRows: NSObject, UITableViewDataSource, UITableViewDel
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) { selected.append(indexPath.row) }
 }
 
+private final class UnhandledLists: NSObject, UICollectionViewDataSource, UICollectionViewDelegate, UITableViewDataSource, UITableViewDelegate {
+    func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int { 4 }
+    func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
+        collectionView.dequeueReusableCell(withReuseIdentifier: "cell", for: indexPath)
+    }
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { 3 }
+    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell { UITableViewCell() }
+}
+
 private final class TappableView: UIView, SideSeatTappable {
     var points: [CGPoint] = []
     func sideSeatTap(at point: CGPoint) -> Bool {
@@ -115,6 +124,17 @@ private final class InstantPopNavigation: UINavigationController {
         #expect(counter.count == 1)
     }
 
+    @Test func touchDownFiresBeforeTouchUpInside() {
+        let w = window()
+        var order: [String] = []
+        let button = UIButton(frame: CGRect(x: 100, y: 100, width: 200, height: 60))
+        button.addAction(UIAction { _ in order.append("up") }, for: .touchUpInside)
+        button.addAction(UIAction { _ in order.append("down") }, for: .touchDown)
+        w.addSubview(button)
+        #expect(tap(dispatcher([w]), 150, 120) == .performed)
+        #expect(order == ["down", "up"])
+    }
+
     @Test func switchesSegmentsAndSlidersChangeValue() {
         let w = window()
         let toggle = UISwitch(frame: CGRect(x: 10, y: 10, width: 51, height: 31))
@@ -164,6 +184,30 @@ private final class InstantPopNavigation: UINavigationController {
         #expect(tap(d, 500, 250) == .nothing("notSelectable"))
         #expect(tap(d, 500, 50) == .performed)
         #expect(rows.selected == [0])
+    }
+
+    @Test func listsThatIgnoreSelectionAreNotReportedAsDone() {
+        let w = window()
+        let lists = UnhandledLists()
+        let layout = UICollectionViewFlowLayout()
+        layout.itemSize = CGSize(width: 100, height: 100)
+        let collection = UICollectionView(frame: CGRect(x: 0, y: 0, width: 500, height: 500), collectionViewLayout: layout)
+        collection.register(UICollectionViewCell.self, forCellWithReuseIdentifier: "cell")
+        collection.dataSource = lists
+        collection.delegate = lists
+        let table = UITableView(frame: CGRect(x: 500, y: 0, width: 500, height: 500))
+        table.dataSource = lists
+        table.delegate = lists
+        w.addSubview(collection)
+        w.addSubview(table)
+        collection.layoutIfNeeded()
+        table.layoutIfNeeded()
+        let d = dispatcher([w])
+
+        #expect(tap(d, 50, 50) == .nothing("noTarget"))
+        #expect(tap(d, 750, 20) == .nothing("noTarget"))
+        #expect(collection.indexPathsForSelectedItems?.isEmpty != false)
+        #expect(table.indexPathForSelectedRow == nil)
     }
 
     @Test func tappableViewsGetTheirOwnCoordinates() {

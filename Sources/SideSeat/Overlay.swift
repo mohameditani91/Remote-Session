@@ -19,6 +19,9 @@ public struct SideSeatStrings {
 }
 
 final class OverlayWindow: UIWindow {
+    // Views that attach to the key window, like loading spinners, would land here and miss the agent's stream.
+    override var canBecomeKey: Bool { false }
+
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         let hit = super.hitTest(point, with: event)
         return hit === self || hit === rootViewController?.view ? nil : hit

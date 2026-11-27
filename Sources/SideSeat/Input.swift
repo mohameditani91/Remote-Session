@@ -129,9 +129,10 @@ final class InputDispatcher {
     }
 
     private func fire(_ control: UIControl) -> InputResult? {
-        let events = control.allControlEvents.intersection([.touchUpInside, .primaryActionTriggered])
+        let events = control.allControlEvents.intersection([.touchDown, .touchUpInside, .primaryActionTriggered])
         guard !events.isEmpty else { return nil }
         guard control.isEnabled else { return .nothing("disabled") }
+        if events.contains(.touchDown) { control.sendActions(for: .touchDown) }
         if events.contains(.touchUpInside) { control.sendActions(for: .touchUpInside) }
         if events.contains(.primaryActionTriggered) { control.sendActions(for: .primaryActionTriggered) }
         return .performed
@@ -163,6 +164,7 @@ final class InputDispatcher {
     private func select(_ cell: UITableViewCell) -> InputResult? {
         guard let table = cell.ancestor(UITableView.self), let indexPath = table.indexPath(for: cell) else { return nil }
         guard table.isEditing ? table.allowsSelectionDuringEditing : table.allowsSelection else { return .nothing("selectionDisabled") }
+        guard table.delegate?.responds(to: #selector(UITableViewDelegate.tableView(_:didSelectRowAt:))) == true else { return nil }
         let delegate = table.delegate
         if delegate?.tableView?(table, shouldHighlightRowAt: indexPath) == false { return .nothing("notSelectable") }
 
@@ -197,6 +199,7 @@ final class InputDispatcher {
     private func select(_ cell: UICollectionViewCell) -> InputResult? {
         guard let collection = cell.ancestor(UICollectionView.self), let indexPath = collection.indexPath(for: cell) else { return nil }
         guard collection.isEditing ? collection.allowsSelectionDuringEditing : collection.allowsSelection else { return .nothing("selectionDisabled") }
+        guard collection.delegate?.responds(to: #selector(UICollectionViewDelegate.collectionView(_:didSelectItemAt:))) == true else { return nil }
         let delegate = collection.delegate
         if delegate?.collectionView?(collection, shouldHighlightItemAt: indexPath) == false { return .nothing("notSelectable") }
 
