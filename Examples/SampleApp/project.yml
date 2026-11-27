@@ -16,7 +16,7 @@ targets:
     info:
       path: SampleApp/Info.plist
       properties:
-        CFBundleDisplayName: RemoteSession Sample
+        CFBundleDisplayName: RemoteSession
         UILaunchScreen: {}
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
