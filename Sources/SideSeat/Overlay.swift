@@ -14,6 +14,9 @@ public struct SideSeatStrings {
     public var viewOnly = "View only"
     public var end = "End"
     public var cancel = "Cancel"
+    public var approvalTitle = "Allow support to do this?"
+    public var approvalMessage: (String) -> String = { $0 }
+    public var allow = "Allow"
 
     public init() {}
 }
@@ -47,6 +50,7 @@ final class OverlayViewController: UIViewController {
     var onDeny: (() -> Void)?
     var onViewOnly: (() -> Void)?
     var onEnd: (() -> Void)?
+    var onApprove: ((Bool) -> Void)?
 
     private let strings: SideSeatStrings
     private let tint: UIColor
@@ -69,6 +73,8 @@ final class OverlayViewController: UIViewController {
     private var bannerX: NSLayoutConstraint?
     private var bannerY: NSLayoutConstraint?
     private var bannerMoved = false
+    private var lastState: SessionState = .connecting
+    private var approvalAction: String?
 
     init(strings: SideSeatStrings, tint: UIColor, allowsControl: Bool, showsConsent: Bool) {
         self.strings = strings
@@ -93,8 +99,14 @@ final class OverlayViewController: UIViewController {
         bannerY?.constant = view.safeAreaInsets.top + 12 + banner.bounds.height / 2
     }
 
+    func askApproval(_ action: String?) {
+        approvalAction = action
+        render(lastState)
+    }
+
     func render(_ state: SessionState) {
         loadViewIfNeeded()
+        lastState = state
         backdrop.isHidden = true
         banner.isHidden = true
         switch state {
@@ -115,6 +127,12 @@ final class OverlayViewController: UIViewController {
             viewOnlyButton.isHidden = mode != .control
             view.layoutIfNeeded()
             if bannerMoved { moveBanner(to: banner.center) }
+            if let approvalAction {
+                showCard(title: strings.approvalTitle, code: nil, message: strings.approvalMessage(approvalAction), actions: [
+                    (strings.allow, .filled, { [weak self] in self?.onApprove?(true) }),
+                    (strings.deny, .destructive, { [weak self] in self?.onApprove?(false) })
+                ])
+            }
         case .ended:
             break
         }

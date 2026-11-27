@@ -1,4 +1,5 @@
 import UIKit
+import SideSeat
 
 struct Todo {
     let number: Int
@@ -79,7 +80,13 @@ final class TaskDetailViewController: UIViewController, UIPopoverPresentationCon
 
         let secret = UIButton(configuration: .plain())
         secret.configuration?.title = "Recovery key"
-        secret.addAction(UIAction { [weak self] _ in self?.navigationController?.pushViewController(RecoveryKeyViewController(), animated: true) }, for: .touchUpInside)
+        secret.addAction(UIAction { [weak self] _ in
+            // When the agent taps this, the user is asked first.
+            SideSeat.shared.confirmAgentAction("Open the recovery key") { allowed in
+                guard allowed else { return }
+                self?.navigationController?.pushViewController(RecoveryKeyViewController(), animated: true)
+            }
+        }, for: .touchUpInside)
 
         let stack = UIStackView(arrangedSubviews: [summary, row("Done", done), priority, note, optionsButton, toast, secret])
         stack.axis = .vertical

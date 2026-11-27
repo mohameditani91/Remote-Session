@@ -93,7 +93,9 @@ const reasons = {
   noTarget: 'Nothing to tap there', disabled: 'That control is disabled', selectionDisabled: "That list doesn't select",
   notSelectable: "That row can't be selected", noScrollView: 'Nothing scrolls there', atEdge: 'Already at the end',
   noFocusedField: 'Tap a text field first', cannotFocus: "That field can't be edited", alertOpen: 'An alert is open',
-  popoverStaysOpen: 'This popup stays open', backHidden: 'This screen has no Back', nothingToGoBack: 'Nothing to go back to'
+  popoverStaysOpen: 'This popup stays open', backHidden: 'This screen has no Back', nothingToGoBack: 'Nothing to go back to',
+  waitingForUser: 'Waiting for the user to answer', keyboard: 'That key is locked', swiftUIControl: "That control can't be tapped remotely",
+  barItemNotFound: 'No bar button there', menu: 'That button opens a menu', noSwipeActions: 'Nothing to swipe there'
 }
 let ws = null, mode = null, seq = 0, scroll = null
 const pending = new Map()
@@ -142,6 +144,10 @@ function connect(code, name) {
     const message = JSON.parse(event.data)
     if (message.type === 'consent') { setMode(message.mode); addEvent('User allowed ' + (message.mode === 'control' ? 'control' : 'viewing'), '', 'good') }
     if (message.type === 'mode') { setMode(message.mode); addEvent('User switched to view only', '', 'bad') }
+    if (message.type === 'approval') {
+      if (message.allowed === undefined) { setStatus('Waiting for the user', 'warn'); addEvent('Asked the user: ' + message.action, 'Waiting…') }
+      else { setMode(mode); addEvent('User ' + (message.allowed ? 'allowed: ' : 'declined: ') + message.action, '', message.allowed ? 'good' : 'bad') }
+    }
     if (message.type === 'result') {
       const row = pending.get(message.id); pending.delete(message.id)
       if (row) {

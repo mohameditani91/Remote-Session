@@ -42,7 +42,23 @@ public final class SideSeat {
     public var state: SessionState? { session?.state }
     public var isRunning: Bool { session != nil }
 
+    /// True while the agent has control and gave the last input that did something, with no touch from the user since.
+    public var isAgentAction: Bool {
+        approval.isAgentAction(inControl: session?.state.isControlling == true, at: ProcessInfo.processInfo.systemUptime)
+    }
+
+    /// Asks the user to allow `action`, such as "Delete the task", when the agent started it, and blocks agent input until they answer.
+    /// Calls back with true right away when the user started it.
+    public func confirmAgentAction(_ action: String, completion: @escaping (Bool) -> Void) {
+        guard isAgentAction else { return completion(true) }
+        guard approval.ask(action, completion: completion) else { return }
+        controller?.askApproval(action)
+        session?.sendApproval(action: action, allowed: nil)
+    }
+
     private var session: Session?
+    private weak var controller: OverlayViewController?
+    private var approval = AgentApproval()
     private var streamer: Streamer?
     private var overlay: OverlayWindow?
     private var keyboard: KeyboardFrame?
@@ -67,9 +83,14 @@ public final class SideSeat {
         // Described before it runs: a tap can change the screen.
         var described: (target: String?, screen: String?)?
         let describe = { (input: RemoteInput) in (target: dispatcher.describe(input), screen: dispatcher.screenName()) }
-        session.perform = { input in
+        session.perform = { [weak self] input in
+            guard let self, !self.approval.isPending else { return .blocked("waitingForUser") }
             described = describe(input)
-            return configuration.inputInterceptor?(input) ?? dispatcher.perform(input)
+            // Counted before it runs, so an approval the input triggers sees it as the agent's.
+            let earlier = self.approval.agentInput(at: ProcessInfo.processInfo.systemUptime)
+            let result = configuration.inputInterceptor?(input) ?? dispatcher.perform(input)
+            if result.outcome != .performed { self.approval.agentInputDidNothing(restoring: earlier) }
+            return result
         }
 
         let controller = OverlayViewController(strings: configuration.strings, tint: configuration.tint, allowsControl: configuration.allowsControl, showsConsent: configuration.consentHandler == nil)
@@ -78,6 +99,7 @@ public final class SideSeat {
         controller.onAllow = { [weak session] in session?.grant($0) }
         controller.onDeny = { [weak session] in session?.deny() }
         controller.onViewOnly = { [weak session] in session?.switchToViewOnly() }
+        controller.onApprove = { [weak self] in self?.answerApproval($0) }
 
         let window = OverlayWindow(windowScene: scene)
         window.windowLevel = .alert + 1
@@ -85,7 +107,10 @@ public final class SideSeat {
         window.isHidden = false
 
         let streamer = Streamer(scene: scene, configuration: configuration, session: session, keyboard: keyboardRect)
-        window.onTouch = { [weak streamer] in streamer?.captureSoon(after: Streamer.userTouchCaptureDelay) }
+        window.onTouch = { [weak self, weak streamer] in
+            self?.approval.userInput()
+            streamer?.captureSoon(after: Streamer.userTouchCaptureDelay)
+        }
         session.onInput = { [weak self, weak controller, weak streamer] input, result in
             if case .tap(let x, let y) = input, let color = configuration.tapIndicatorColor {
                 controller?.showTouch(at: dispatcher.point(x, y), color: color)
@@ -96,6 +121,7 @@ public final class SideSeat {
             self?.onInput?(InputEvent(input: input, result: result, target: target, screen: screen))
         }
         session.onStateChange = { [weak self, weak session, weak controller, weak streamer] state in
+            if !state.isControlling { self?.answerApproval(false) }
             controller?.render(state)
             if case .active = state { streamer?.restart() }
             if case .awaitingConsent(_, let agent) = state, let ask = configuration.consentHandler {
@@ -112,6 +138,7 @@ public final class SideSeat {
         self.session = session
         self.streamer = streamer
         self.overlay = window
+        self.controller = controller
         self.keyboard = keyboard
         controller.render(.connecting)
         streamer.start()
@@ -122,12 +149,77 @@ public final class SideSeat {
         session?.end()
     }
 
+    private func answerApproval(_ allowed: Bool) {
+        guard let action = approval.action else { return }
+        let answers = approval.answer()
+        controller?.askApproval(nil)
+        session?.sendApproval(action: action, allowed: allowed)
+        answers.forEach { $0(allowed) }
+    }
+
     private func tearDown() {
+        approval = AgentApproval()
         streamer?.stop()
         overlay?.isHidden = true
         overlay = nil
         keyboard = nil
         streamer = nil
         session = nil
+    }
+}
+
+/// Decides whether an action the app is about to take came from the agent, and holds the user's pending answer.
+struct AgentApproval {
+
+    /// How long the agent's last input counts. Long enough to outlast a slow request before the app asks; the user's own touch ends it.
+    static let window: TimeInterval = 90
+
+    private(set) var action: String?
+    private var answers: [(Bool) -> Void] = []
+    private var lastAgentInputAt: TimeInterval?
+
+    var isPending: Bool { action != nil }
+
+    @discardableResult
+    mutating func agentInput(at time: TimeInterval) -> TimeInterval? {
+        defer { lastAgentInputAt = time }
+        return lastAgentInputAt
+    }
+
+    mutating func agentInputDidNothing(restoring earlier: TimeInterval?) {
+        lastAgentInputAt = earlier
+    }
+
+    mutating func userInput() {
+        lastAgentInputAt = nil
+    }
+
+    func isAgentAction(inControl: Bool, at time: TimeInterval) -> Bool {
+        guard inControl, let lastAgentInputAt else { return false }
+        return time - lastAgentInputAt < Self.window
+    }
+
+    /// Returns true when the card should go up; later asks share the open card's answer.
+    mutating func ask(_ action: String, completion: @escaping (Bool) -> Void) -> Bool {
+        answers.append(completion)
+        guard self.action == nil else { return false }
+        self.action = action
+        return true
+    }
+
+    mutating func answer() -> [(Bool) -> Void] {
+        defer {
+            action = nil
+            answers = []
+            lastAgentInputAt = nil
+        }
+        return answers
+    }
+}
+
+private extension SessionState {
+    var isControlling: Bool {
+        if case .active(_, _, .control) = self { return true }
+        return false
     }
 }

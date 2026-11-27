@@ -82,6 +82,10 @@ final class Session {
         finish(.userEnded, notify: true)
     }
 
+    func sendApproval(action: String, allowed: Bool?) {
+        send(.approval(action: action, allowed: allowed))
+    }
+
     func sendScreen(width: Double, height: Double) {
         send(.screen(width: width, height: height))
     }

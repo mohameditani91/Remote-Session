@@ -78,6 +78,7 @@ enum OutgoingMessage: Equatable {
     case screen(width: Double, height: Double)
     case result(id: String, InputResult)
     case mode(SessionMode)
+    case approval(action: String, allowed: Bool?)
     case end(EndReason)
 }
 
@@ -99,6 +100,7 @@ private struct Envelope: Codable {
     var outcome: InputResult.Outcome?
     var width: Double?
     var height: Double?
+    var allowed: Bool?
 
     init(type: String) {
         self.type = type
@@ -176,6 +178,10 @@ extension OutgoingMessage {
         case .mode(let mode):
             envelope = Envelope(type: "mode")
             envelope.mode = mode
+        case .approval(let action, let allowed):
+            envelope = Envelope(type: "approval")
+            envelope.action = action
+            envelope.allowed = allowed
         case .end(let reason):
             envelope = Envelope(type: "end")
             envelope.reason = reason.rawValue
