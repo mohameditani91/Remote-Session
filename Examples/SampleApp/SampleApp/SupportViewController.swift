@@ -1,5 +1,5 @@
 import UIKit
-import SideSeat
+import RemoteSession
 
 final class SupportViewController: UIViewController {
 
@@ -56,23 +56,23 @@ final class SupportViewController: UIViewController {
             stack.trailingAnchor.constraint(equalTo: view.readableContentGuide.trailingAnchor)
         ])
 
-        SideSeat.shared.onStateChange = { [weak self] in self?.refresh($0) }
-        refresh(SideSeat.shared.state)
+        RemoteSession.shared.onStateChange = { [weak self] in self?.refresh($0) }
+        refresh(RemoteSession.shared.state)
     }
 
     private func toggle() {
-        if SideSeat.shared.isRunning {
-            SideSeat.shared.end()
+        if RemoteSession.shared.isRunning {
+            RemoteSession.shared.end()
         } else if let scene = view.window?.windowScene {
             Support.start(in: scene)
-            refresh(SideSeat.shared.state)
+            refresh(RemoteSession.shared.state)
         }
     }
 
     private func refresh(_ state: SessionState?) {
-        button.configuration?.title = SideSeat.shared.isRunning ? "End support session" : "Start support session"
-        relayField.isEnabled = !SideSeat.shared.isRunning
-        videoSwitch.isEnabled = !SideSeat.shared.isRunning
+        button.configuration?.title = RemoteSession.shared.isRunning ? "End support session" : "Start support session"
+        relayField.isEnabled = !RemoteSession.shared.isRunning
+        videoSwitch.isEnabled = !RemoteSession.shared.isRunning
         switch state {
         case .waitingForAgent(let code)?: status.text = "Code \(code). Waiting for an agent."
         case .awaitingConsent(_, let agent)?: status.text = "\(agent.name) is asking to join."

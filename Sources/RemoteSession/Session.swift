@@ -19,10 +19,10 @@ final class Session {
         didSet { if state != oldValue { onStateChange?(state) } }
     }
 
-    private let transport: SideSeatTransport
+    private let transport: RemoteSessionTransport
     private let allowsControl: Bool
 
-    init(transport: SideSeatTransport, allowsControl: Bool) {
+    init(transport: RemoteSessionTransport, allowsControl: Bool) {
         self.transport = transport
         self.allowsControl = allowsControl
     }

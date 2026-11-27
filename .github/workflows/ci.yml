@@ -21,8 +21,8 @@ jobs:
           id=$(xcrun simctl list devices available --json | python3 -c "import json,sys; print(next(d['udid'] for r, ds in json.load(sys.stdin)['devices'].items() if 'iOS' in r for d in ds if d['name'].startswith('iPhone')))")
           echo "SIMULATOR=$id" >> "$GITHUB_ENV"
 
-      - name: Test SideSeat
-        run: xcodebuild test -scheme SideSeat -destination "id=$SIMULATOR" | xcbeautify || exit ${PIPESTATUS[0]}
+      - name: Test RemoteSession
+        run: xcodebuild test -scheme RemoteSession -destination "id=$SIMULATOR" | xcbeautify || exit ${PIPESTATUS[0]}
 
       - name: Build sample app
         run: xcodebuild build -project Examples/SampleApp/SampleApp.xcodeproj -scheme SampleApp -destination "id=$SIMULATOR" CODE_SIGNING_ALLOWED=NO | xcbeautify || exit ${PIPESTATUS[0]}

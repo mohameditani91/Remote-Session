@@ -3,7 +3,7 @@ import Foundation
 import CoreImage
 import CoreVideo
 import UIKit
-@testable import SideSeat
+@testable import RemoteSession
 
 final class ManualScheduler: Scheduler {
 

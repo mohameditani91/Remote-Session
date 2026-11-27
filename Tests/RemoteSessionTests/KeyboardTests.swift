@@ -1,6 +1,6 @@
 import UIKit
 import Testing
-@testable import SideSeat
+@testable import RemoteSession
 
 @MainActor
 @Suite struct KeyboardTests {
@@ -97,7 +97,7 @@ import Testing
         let password = UITextField(frame: CGRect(x: 10, y: 60, width: 200, height: 40))
         password.isSecureTextEntry = true
         let hidden = UITextField(frame: CGRect(x: 10, y: 110, width: 200, height: 40))
-        hidden.isSideSeatMasked = true
+        hidden.isRemoteSessionMasked = true
         [plain, password, hidden].forEach(window.addSubview)
 
         #expect(!KeyboardPlaceholder.isSensitive(plain))

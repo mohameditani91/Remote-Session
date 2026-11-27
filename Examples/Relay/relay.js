@@ -1,4 +1,4 @@
-// SideSeat reference relay. Pairs one app (device) with one browser (agent) by a 6-digit code.
+// RemoteSession reference relay. Pairs one app (device) with one browser (agent) by a 6-digit code.
 // A starting point for local development, not a production service: no TLS, no agent accounts, no audit log.
 
 const http = require('http')
@@ -135,7 +135,7 @@ function log(code, text) {
 }
 
 server.listen(PORT, HOST, () => {
-  console.log(`SideSeat relay on http://${HOST}:${PORT}`)
+  console.log(`RemoteSession relay on http://${HOST}:${PORT}`)
   console.log(`  apps connect to  ws://${HOST}:${PORT}/device${DEVICE_TOKEN ? '?token=…' : ''}`)
   console.log(`  agents open      http://${HOST}:${PORT}`)
 })

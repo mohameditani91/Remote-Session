@@ -295,7 +295,7 @@ final class SimulatorCaptureSource: CaptureSource {
         context.translateBy(x: 0, y: bounds.height)
         context.scaleBy(x: 1, y: -1)
         UIGraphicsPushContext(context)
-        // Like ReplayKit, the recording includes SideSeat's own banner.
+        // Like ReplayKit, the recording includes RemoteSession's own banner.
         let overlays = scene.windows.filter { $0 is OverlayWindow && !$0.isHidden }
         for window in WindowSelection.capturable(scene.windows) + overlays {
             window.drawHierarchy(in: window.convert(window.bounds, to: scene.coordinateSpace), afterScreenUpdates: false)
@@ -437,7 +437,7 @@ final class VideoStreamer: FrameStreamer {
     private let isAllowed: () -> Bool
     private let sendFrame: (Data, @escaping () -> Void) -> Void
     private let sendSceneSize: (CGSize) -> Void
-    private let queue = DispatchQueue(label: "SideSeat.video", qos: .userInitiated)
+    private let queue = DispatchQueue(label: "RemoteSession.video", qos: .userInitiated)
     private let context = CIContext(options: [.cacheIntermediates: false])
     private let lock = NSLock()
     private var shared = Shared()

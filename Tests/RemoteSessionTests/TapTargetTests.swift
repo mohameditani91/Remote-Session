@@ -1,6 +1,6 @@
 import SwiftUI
 import Testing
-@testable import SideSeat
+@testable import RemoteSession
 
 private final class Log {
     var events: [String] = []
@@ -20,22 +20,22 @@ private struct Controls: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Text("tap").frame(width: 300, height: 50).contentShape(Rectangle()).sideSeatTapGesture { log.events.append("tap") }
-            Button("button") { log.events.append("button") }.sideSeatButton().frame(width: 300, height: 50)
+            Text("tap").frame(width: 300, height: 50).contentShape(Rectangle()).remoteSessionTapGesture { log.events.append("tap") }
+            Button("button") { log.events.append("button") }.remoteSessionButton().frame(width: 300, height: 50)
             Toggle("plain", isOn: $on).frame(width: 300, height: 50)
             Toggle("hooked", isOn: Binding(get: { on }, set: { on = $0; log.events.append("toggle") }))
                 .frame(width: 300, height: 50)
-                .sideSeatTarget { on.toggle(); log.events.append("toggle") }
-            List { Button("row") { log.events.append("row") }.sideSeatButton() }.frame(width: 300, height: 100)
+                .remoteSessionTarget { on.toggle(); log.events.append("toggle") }
+            List { Button("row") { log.events.append("row") }.remoteSessionButton() }.frame(width: 300, height: 100)
             List {
                 HStack { Text("Total"); Spacer(); Text("0.00") }
                     .padding(.vertical, 12)
                     .contentShape(Rectangle())
-                    .sideSeatTapGesture { log.events.append("total") }
+                    .remoteSessionTapGesture { log.events.append("total") }
                     .frame(minHeight: 80)
                 HStack {
-                    Button("a") { log.events.append("a") }.sideSeatButton()
-                    Button("b") { log.events.append("b") }.sideSeatButton()
+                    Button("a") { log.events.append("a") }.remoteSessionButton()
+                    Button("b") { log.events.append("b") }.remoteSessionButton()
                     Spacer()
                 }
             }
@@ -72,7 +72,7 @@ private struct FieldWithScanButton: View {
     var body: some View {
         Form {
             HStack {
-                Text("Address").frame(maxWidth: .infinity, alignment: .leading).sideSeatTapGesture { log.events.append("field") }
+                Text("Address").frame(maxWidth: .infinity, alignment: .leading).remoteSessionTapGesture { log.events.append("field") }
                 UIKitButton(log: log, plainSwiftTarget: plainSwiftTarget).fixedSize()
             }
         }
@@ -112,7 +112,7 @@ private struct FieldWithScanButton: View {
         window.isHidden = false
         let view = UIView(frame: CGRect(x: 100, y: 100, width: 200, height: 60))
         let handler = GestureHandler()
-        view.addGestureRecognizer(SideSeatTapGestureRecognizer(target: handler, action: #selector(GestureHandler.tapped(_:))))
+        view.addGestureRecognizer(RemoteSessionTapGestureRecognizer(target: handler, action: #selector(GestureHandler.tapped(_:))))
         window.addSubview(view)
         #expect(tap(window, 150, 120) == .performed)
         #expect(handler.calls.count == 1)
@@ -125,9 +125,9 @@ private struct FieldWithScanButton: View {
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 1000, height: 500))
         window.isHidden = false
         let handler = GestureHandler()
-        let disabled = SideSeatTapGestureRecognizer(target: handler, action: #selector(GestureHandler.tapped(_:)))
+        let disabled = RemoteSessionTapGestureRecognizer(target: handler, action: #selector(GestureHandler.tapped(_:)))
         disabled.isEnabled = false
-        let doubleTap = SideSeatTapGestureRecognizer(target: handler, action: #selector(GestureHandler.tapped(_:)))
+        let doubleTap = RemoteSessionTapGestureRecognizer(target: handler, action: #selector(GestureHandler.tapped(_:)))
         doubleTap.numberOfTapsRequired = 2
         let plain = UITapGestureRecognizer(target: handler, action: #selector(GestureHandler.tapped(_:)))
         for (index, recognizer) in [disabled, doubleTap, plain].enumerated() {
@@ -143,7 +143,7 @@ private struct FieldWithScanButton: View {
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 1000, height: 500))
         window.isHidden = false
         let handler = GestureHandler()
-        let recognizer = SideSeatTapGestureRecognizer(target: handler, action: #selector(GestureHandler.tapped(_:)))
+        let recognizer = RemoteSessionTapGestureRecognizer(target: handler, action: #selector(GestureHandler.tapped(_:)))
         recognizer.removeTarget(handler, action: nil)
         let view = UIView(frame: CGRect(x: 0, y: 0, width: 200, height: 60))
         view.addGestureRecognizer(recognizer)
@@ -192,8 +192,8 @@ private struct FieldWithScanButton: View {
     @Test func disabledSwiftUITargetsAreNotFired() async throws {
         let log = Log()
         let view = VStack(spacing: 0) {
-            Button("off") { log.events.append("button") }.sideSeatButton().disabled(true).frame(width: 300, height: 50)
-            Text("off").frame(width: 300, height: 50).contentShape(Rectangle()).sideSeatTapGesture { log.events.append("tap") }.disabled(true)
+            Button("off") { log.events.append("button") }.remoteSessionButton().disabled(true).frame(width: 300, height: 50)
+            Text("off").frame(width: 300, height: 50).contentShape(Rectangle()).remoteSessionTapGesture { log.events.append("tap") }.disabled(true)
         }
         .frame(width: 300, height: 100)
         let window = try await host(view, size: CGSize(width: 300, height: 100))
@@ -202,10 +202,10 @@ private struct FieldWithScanButton: View {
         #expect(log.events.isEmpty)
     }
 
-    @Test func sideSeatButtonKeepsTheEnclosingButtonStyle() async throws {
+    @Test func remoteSessionButtonKeepsTheEnclosingButtonStyle() async throws {
         let size = CGSize(width: 240, height: 80)
         let styled = try await host(Button("Pay") {}.buttonStyle(.borderedProminent).padding(), size: size)
-        let hooked = try await host(Button("Pay") {}.sideSeatButton().buttonStyle(.borderedProminent).padding(), size: size)
+        let hooked = try await host(Button("Pay") {}.remoteSessionButton().buttonStyle(.borderedProminent).padding(), size: size)
         let plain = try await host(Button("Pay") {}.padding(), size: size)
         #expect(snapshot(styled) == snapshot(hooked))
         #expect(snapshot(styled) != snapshot(plain))

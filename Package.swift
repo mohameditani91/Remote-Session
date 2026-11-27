@@ -2,13 +2,13 @@
 import PackageDescription
 
 let package = Package(
-    name: "SideSeat",
+    name: "RemoteSession",
     platforms: [.iOS(.v15)],
     products: [
-        .library(name: "SideSeat", targets: ["SideSeat"])
+        .library(name: "RemoteSession", targets: ["RemoteSession"])
     ],
     targets: [
-        .target(name: "SideSeat"),
-        .testTarget(name: "SideSeatTests", dependencies: ["SideSeat"])
+        .target(name: "RemoteSession"),
+        .testTarget(name: "RemoteSessionTests", dependencies: ["RemoteSession"])
     ]
 )

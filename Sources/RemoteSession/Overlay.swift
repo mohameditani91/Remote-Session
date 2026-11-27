@@ -1,6 +1,6 @@
 import UIKit
 
-public struct SideSeatStrings {
+public struct RemoteSessionStrings {
     public var connecting = "Connecting…"
     public var codeTitle = "Support code"
     public var codeMessage = "Read this code to the support agent."
@@ -52,7 +52,7 @@ final class OverlayViewController: UIViewController {
     var onEnd: (() -> Void)?
     var onApprove: ((Bool) -> Void)?
 
-    private let strings: SideSeatStrings
+    private let strings: RemoteSessionStrings
     private let tint: UIColor
     private let allowsControl: Bool
     private let showsConsent: Bool
@@ -76,7 +76,7 @@ final class OverlayViewController: UIViewController {
     private var lastState: SessionState = .connecting
     private var approvalAction: String?
 
-    init(strings: SideSeatStrings, tint: UIColor, allowsControl: Bool, showsConsent: Bool) {
+    init(strings: RemoteSessionStrings, tint: UIColor, allowsControl: Bool, showsConsent: Bool) {
         self.strings = strings
         self.tint = tint
         self.allowsControl = allowsControl
@@ -235,7 +235,7 @@ final class OverlayViewController: UIViewController {
         configuration.cornerStyle = .large
         configuration.buttonSize = .large
         let button = UIButton(configuration: configuration, primaryAction: UIAction { _ in action() })
-        button.accessibilityIdentifier = "sideseat.\(title)"
+        button.accessibilityIdentifier = "remotesession.\(title)"
         return button
     }
 
@@ -352,7 +352,7 @@ final class OverlayViewController: UIViewController {
         }
         button.configuration = configuration
         button.addAction(UIAction { _ in action() }, for: .primaryActionTriggered)
-        button.accessibilityIdentifier = "sideseat.\(title)"
+        button.accessibilityIdentifier = "remotesession.\(title)"
     }
 
     @objc private func bannerDragged(_ pan: UIPanGestureRecognizer) {

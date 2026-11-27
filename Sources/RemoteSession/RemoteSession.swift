@@ -1,16 +1,16 @@
 import UIKit
 
 /// Lets a support agent see, and with the user's consent control, this app from a browser.
-public final class SideSeat {
+public final class RemoteSession {
 
     public struct Configuration {
         /// The relay's device endpoint, for example `ws://localhost:8080/device`. Add auth headers or query items here.
         public var request: URLRequest
         /// Replaces the WebSocket transport, for example to run over your own backend.
-        public var transport: SideSeatTransport?
+        public var transport: RemoteSessionTransport?
         public var allowsControl = true
         /// Streams H.264 video captured with ReplayKit when the agent's browser can decode it, and JPEG frames otherwise.
-        /// iOS asks the user to allow screen recording first; if they don't, or capture fails, SideSeat falls back to JPEG.
+        /// iOS asks the user to allow screen recording first; if they don't, or capture fails, RemoteSession falls back to JPEG.
         public var video = false
         /// JPEG frames only. Video runs at up to 30 fps.
         public var framesPerSecond: Double = 2
@@ -18,13 +18,13 @@ public final class SideSeat {
         public var jpegQuality: CGFloat = 0.7
         /// Frame rate halves while a capture takes longer than this on the main thread.
         public var mainThreadBudget: TimeInterval = 0.05
-        /// Returns true for views to paint black. Secure text fields and `isSideSeatMasked` views are always masked.
+        /// Returns true for views to paint black. Secure text fields and `isRemoteSessionMasked` views are always masked.
         public var maskRule: ((UIView) -> Bool)?
-        /// Sees every agent input first. Return a result to handle or block it, or nil to let SideSeat perform it.
+        /// Sees every agent input first. Return a result to handle or block it, or nil to let RemoteSession perform it.
         public var inputInterceptor: ((RemoteInput) -> InputResult?)?
         /// Replaces the built-in consent card. Call the completion with the granted mode, or nil to deny.
         public var consentHandler: ((Agent, @escaping (SessionMode?) -> Void) -> Void)?
-        public var strings = SideSeatStrings()
+        public var strings = RemoteSessionStrings()
         public var tint: UIColor = .systemBlue
         /// Marks each agent tap on the user's screen with a dot and ripples, so they can follow along. Set nil to hide it.
         public var tapIndicatorColor: UIColor? = UIColor(red: 1, green: 0.42, blue: 0, alpha: 1)
@@ -38,7 +38,7 @@ public final class SideSeat {
         }
     }
 
-    public static let shared = SideSeat()
+    public static let shared = RemoteSession()
 
     public var onStateChange: ((SessionState) -> Void)?
     /// Reports every agent input with its result and what it reached, for an audit log.
@@ -131,7 +131,7 @@ public final class SideSeat {
                 overlays: overlays,
                 keyboard: {
                     guard let scene, let rect = keyboardRect() else { return nil }
-                    let sensitive = KeyboardPlaceholder.isSensitive(UIResponder.sideSeatFirstResponder(), rule: configuration.maskRule)
+                    let sensitive = KeyboardPlaceholder.isSensitive(UIResponder.remoteSessionFirstResponder(), rule: configuration.maskRule)
                     return KeyboardOverlay(rect: rect, dark: scene.traitCollection.userInterfaceStyle == .dark, blurred: sensitive)
                 },
                 isAllowed: { session?.isStreaming ?? false },

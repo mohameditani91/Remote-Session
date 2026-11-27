@@ -67,7 +67,7 @@ enum KeyboardPlaceholder {
     static func isSensitive(_ responder: UIResponder?, rule: ((UIView) -> Bool)? = nil) -> Bool {
         if (responder as? UITextField)?.isSecureTextEntry == true || (responder as? UITextView)?.isSecureTextEntry == true { return true }
         guard let view = responder as? UIView, let window = view.window else { return false }
-        if view.isSideSeatMasked { return true }
+        if view.isRemoteSessionMasked { return true }
         let frame = view.convert(view.bounds, to: window)
         return MaskCollector.rects(in: window, rule: rule).contains { $0.intersects(frame) }
     }

@@ -12,7 +12,7 @@
 		87AED5DA8EDC6E047C83EDA8 /* TasksViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22EC8817C8DA82272518CD7A /* TasksViewController.swift */; };
 		B23E1C0C91DE03AD0846269B /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 053C258100E63F42794E10B9 /* ProfileView.swift */; };
 		D15533D2336DFBADA3739DCF /* Support.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97FB383D9BE4295C95934D41 /* Support.swift */; };
-		DE2999F6FB10010A085FECC2 /* SideSeat in Frameworks */ = {isa = PBXBuildFile; productRef = A19858D28DA82A03D144775E /* SideSeat */; };
+		DE2999F6FB10010A085FECC2 /* RemoteSession in Frameworks */ = {isa = PBXBuildFile; productRef = A19858D28DA82A03D144775E /* RemoteSession */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -22,7 +22,7 @@
 		5BC55961AA2B8A5B323DFEAF /* SupportViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupportViewController.swift; sourceTree = "<group>"; };
 		97FB383D9BE4295C95934D41 /* Support.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Support.swift; sourceTree = "<group>"; };
 		A9D7D9D82FDEFBEF2A468B1B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
-		AFBD3E5D2295CF4B791D4B95 /* SideSeat */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SideSeat; path = ../..; sourceTree = SOURCE_ROOT; };
+		AFBD3E5D2295CF4B791D4B95 /* RemoteSession */ = {isa = PBXFileReference; lastKnownFileType = folder; name = RemoteSession; path = ../..; sourceTree = SOURCE_ROOT; };
 		DD0E01F9D77DC91660EB290F /* SampleApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SampleApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -31,7 +31,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				DE2999F6FB10010A085FECC2 /* SideSeat in Frameworks */,
+				DE2999F6FB10010A085FECC2 /* RemoteSession in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -63,7 +63,7 @@
 		E4F3AF9EA173644759DEF899 /* Packages */ = {
 			isa = PBXGroup;
 			children = (
-				AFBD3E5D2295CF4B791D4B95 /* SideSeat */,
+				AFBD3E5D2295CF4B791D4B95 /* RemoteSession */,
 			);
 			name = Packages;
 			sourceTree = "<group>";
@@ -92,7 +92,7 @@
 			);
 			name = SampleApp;
 			packageProductDependencies = (
-				A19858D28DA82A03D144775E /* SideSeat */,
+				A19858D28DA82A03D144775E /* RemoteSession */,
 			);
 			productName = SampleApp;
 			productReference = DD0E01F9D77DC91660EB290F /* SampleApp.app */;
@@ -158,7 +158,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = dev.sideseat.SampleApp;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.remotesession.SampleApp;
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -241,7 +241,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = dev.sideseat.SampleApp;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.remotesession.SampleApp;
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -335,9 +335,9 @@
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		A19858D28DA82A03D144775E /* SideSeat */ = {
+		A19858D28DA82A03D144775E /* RemoteSession */ = {
 			isa = XCSwiftPackageProductDependency;
-			productName = SideSeat;
+			productName = RemoteSession;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
