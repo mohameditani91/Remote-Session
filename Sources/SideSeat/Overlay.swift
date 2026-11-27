@@ -22,7 +22,10 @@ final class OverlayWindow: UIWindow {
     // Views that attach to the key window, like loading spinners, would land here and miss the agent's stream.
     override var canBecomeKey: Bool { false }
 
+    var onTouch: (() -> Void)?
+
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        if event?.type == .touches { onTouch?() }
         let hit = super.hitTest(point, with: event)
         return hit === self || hit === rootViewController?.view ? nil : hit
     }
@@ -114,6 +117,35 @@ final class OverlayViewController: UIViewController {
             if bannerMoved { moveBanner(to: banner.center) }
         case .ended:
             break
+        }
+    }
+
+    func showTouch(at point: CGPoint, color: UIColor) {
+        loadViewIfNeeded()
+        let size: CGFloat = 56
+        let ring = UIView(frame: CGRect(x: point.x - size / 2, y: point.y - size / 2, width: size, height: size))
+        ring.isUserInteractionEnabled = false
+        ring.layer.cornerRadius = size / 2
+        ring.layer.borderWidth = 4
+        ring.layer.borderColor = color.cgColor
+        ring.backgroundColor = color.withAlphaComponent(0.15)
+        ring.layer.shadowColor = UIColor.black.cgColor
+        ring.layer.shadowOpacity = 0.5
+        ring.layer.shadowRadius = 3
+        ring.layer.shadowOffset = .zero
+        let dot = UIView(frame: CGRect(x: size / 2 - 6, y: size / 2 - 6, width: 12, height: 12))
+        dot.layer.cornerRadius = 6
+        dot.layer.borderWidth = 2
+        dot.layer.borderColor = UIColor.white.cgColor
+        dot.backgroundColor = color
+        ring.addSubview(dot)
+        view.insertSubview(ring, belowSubview: backdrop)
+        ring.transform = CGAffineTransform(scaleX: 0.5, y: 0.5)
+        UIView.animate(withDuration: 0.2, delay: 0, options: .curveEaseOut) { ring.transform = .identity }
+        UIView.animate(withDuration: 0.4, delay: 1.2, options: .curveEaseIn) {
+            ring.alpha = 0
+        } completion: { _ in
+            ring.removeFromSuperview()
         }
     }
 

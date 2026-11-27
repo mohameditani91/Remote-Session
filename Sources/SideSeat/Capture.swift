@@ -90,6 +90,10 @@ struct FrameRatePolicy: Equatable {
 
 final class Streamer {
 
+    /// Lets the screen settle after an agent input or a user touch, then sends it without waiting for the next tick.
+    static let inputCaptureDelay: TimeInterval = 0.2
+    static let userTouchCaptureDelay: TimeInterval = 0.6
+
     private weak var scene: UIWindowScene?
     private let configuration: SideSeat.Configuration
     private let session: Session
@@ -99,6 +103,7 @@ final class Streamer {
     private var inFlight = false
     private var lastFrame: Data?
     private var lastSize: CGSize?
+    private var captureSoonWork: DispatchWorkItem?
 
     init(scene: UIWindowScene, configuration: SideSeat.Configuration, session: Session) {
         self.scene = scene
@@ -112,8 +117,17 @@ final class Streamer {
     }
 
     func stop() {
+        captureSoonWork?.cancel()
         timer?.invalidate()
         timer = nil
+    }
+
+    func captureSoon(after delay: TimeInterval) {
+        guard timer != nil else { return }
+        captureSoonWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.tick() }
+        captureSoonWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
     }
 
     func restart() {

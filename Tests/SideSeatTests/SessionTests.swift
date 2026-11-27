@@ -66,6 +66,19 @@ final class FakeTransport: SideSeatTransport {
         #expect(transport.lastSent == #"{"id":"i1","outcome":"nothing","reason":"noTarget","type":"result"}"#)
     }
 
+    @Test func everyInputIsReportedWithItsResult() {
+        let (session, transport) = activeSession(mode: .control)
+        var reported: [InputResult] = []
+        session.perform = { _ in .performed }
+        session.onInput = { reported.append($1) }
+
+        transport.deliver(#"{"type":"input","id":"i1","action":"back"}"#)
+        session.switchToViewOnly()
+        transport.deliver(#"{"type":"input","id":"i2","action":"back"}"#)
+
+        #expect(reported == [.performed, .blocked("viewOnly")])
+    }
+
     @Test func viewOnlyBlocksInputs() {
         let (session, transport) = activeSession(mode: .view)
         session.perform = { _ in Issue.record("must not run"); return .performed }

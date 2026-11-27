@@ -22,6 +22,8 @@ public final class SideSeat {
         public var consentHandler: ((Agent, @escaping (SessionMode?) -> Void) -> Void)?
         public var strings = SideSeatStrings()
         public var tint: UIColor = .systemBlue
+        /// Rings each agent tap on the user's screen so they can follow along. Set nil to hide it.
+        public var tapIndicatorColor: UIColor? = UIColor(red: 1, green: 0.42, blue: 0, alpha: 1)
 
         public init(request: URLRequest) {
             self.request = request
@@ -64,6 +66,13 @@ public final class SideSeat {
         window.isHidden = false
 
         let streamer = Streamer(scene: scene, configuration: configuration, session: session)
+        window.onTouch = { [weak streamer] in streamer?.captureSoon(after: Streamer.userTouchCaptureDelay) }
+        session.onInput = { [weak controller, weak streamer] input, result in
+            if case .tap(let x, let y) = input, let color = configuration.tapIndicatorColor {
+                controller?.showTouch(at: dispatcher.point(x, y), color: color)
+            }
+            if result.outcome == .performed { streamer?.captureSoon(after: Streamer.inputCaptureDelay) }
+        }
         session.onStateChange = { [weak self, weak session, weak controller, weak streamer] state in
             controller?.render(state)
             if case .active = state { streamer?.restart() }
