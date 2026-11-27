@@ -139,6 +139,70 @@ final class InputDispatcher {
         }
     }
 
+    /// Names what an input reached, for the audit log. Never reads typed text, row text, labels or masked areas.
+    func describe(_ input: RemoteInput) -> String? {
+        switch input {
+        case .tap(let x, let y):
+            let point = point(x, y)
+            if keyboard()?.contains(point) == true { return "keyboard" }
+            guard let hit = hit(at: point) else { return nil }
+            if MaskCollector.rects(in: hit.window, rule: maskRule).contains(where: { $0.contains(hit.point) }) { return "hidden area" }
+            return sequence(first: hit.view, next: \.superview).lazy.compactMap(Self.describe).first
+        case .text, .key:
+            return (firstResponder() as? UIView).flatMap(Self.describe)
+        case .scroll, .back:
+            return nil
+        }
+    }
+
+    static func describe(_ view: UIView) -> String? {
+        let named = { (text: String?) -> String? in
+            guard let text = text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else { return nil }
+            return text.count > 40 ? String(text.prefix(40)) + "…" : text
+        }
+        switch view {
+        case let field as UITextField:
+            return named(field.placeholder ?? field.accessibilityLabel ?? field.accessibilityIdentifier).map { "\"\($0)\" field" } ?? "text field"
+        case let textView as UITextView:
+            return named(textView.accessibilityLabel ?? textView.accessibilityIdentifier).map { "\"\($0)\" text box" } ?? "text box"
+        case let button as UIButton:
+            return named(button.accessibilityLabel ?? button.title(for: .normal) ?? button.configuration?.title ?? button.accessibilityIdentifier).map { "\"\($0)\" button" } ?? "button"
+        case let toggle as UISwitch:
+            return named(toggle.accessibilityLabel ?? toggle.accessibilityIdentifier).map { "\"\($0)\" switch" } ?? "switch"
+        case let segmented as UISegmentedControl:
+            return named(segmented.accessibilityLabel ?? segmented.accessibilityIdentifier).map { "\"\($0)\" tabs" } ?? "tabs"
+        case let cell as UITableViewCell:
+            return cell.ancestor(UITableView.self)?.indexPath(for: cell).map { "row \($0.row + 1)" } ?? "row"
+        case let cell as UICollectionViewCell:
+            let labels = cell.contentView.subviews.compactMap { $0 as? UILabel }.filter { !$0.isHidden }
+            if labels.count == 1, let key = labels[0].text, (1...2).contains(key.count) { return "key \"\(key)\"" }
+            return cell.ancestor(UICollectionView.self)?.indexPath(for: cell).map { "item \($0.item + 1)" } ?? "item"
+        case let control as UIControl:
+            return named(control.accessibilityLabel ?? control.accessibilityIdentifier)
+        default:
+            guard view.isAccessibilityElement, !(view is UILabel) else { return nil }
+            return named(view.accessibilityLabel ?? view.accessibilityIdentifier)
+        }
+    }
+
+    /// The type name of the view controller the user is looking at.
+    func screenName() -> String? {
+        guard var controller = WindowSelection.forInput(windows()).first?.rootViewController else { return nil }
+        while true {
+            if let presented = controller.presentedViewController, !presented.isBeingDismissed {
+                controller = presented
+            } else if let navigation = controller as? UINavigationController, let visible = navigation.visibleViewController, visible !== controller {
+                controller = visible
+            } else if let tabs = controller as? UITabBarController, let selected = tabs.selectedViewController {
+                controller = selected
+            } else if let child = controller.children.last {
+                controller = child
+            } else {
+                return String(describing: type(of: controller))
+            }
+        }
+    }
+
     func point(_ x: Double, _ y: Double) -> CGPoint {
         let bounds = bounds()
         return CGPoint(x: bounds.minX + CGFloat(min(max(x, 0), 1)) * bounds.width, y: bounds.minY + CGFloat(min(max(y, 0), 1)) * bounds.height)

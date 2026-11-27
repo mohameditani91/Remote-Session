@@ -34,6 +34,16 @@ public enum RemoteInput: Equatable {
     case back
 }
 
+/// One agent input, as reported to `SideSeat.onInput`.
+public struct InputEvent: Equatable {
+    public let input: RemoteInput
+    public let result: InputResult
+    /// What the input reached, such as `"Save" button`, `"Email" field` or `row 3`. Never typed text, row text or masked content.
+    public let target: String?
+    /// The type name of the visible view controller.
+    public let screen: String?
+}
+
 public struct InputResult: Equatable {
     public enum Outcome: String, Codable {
         case performed

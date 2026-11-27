@@ -37,6 +37,8 @@ public final class SideSeat {
     public static let shared = SideSeat()
 
     public var onStateChange: ((SessionState) -> Void)?
+    /// Reports every agent input with its result and what it reached, for an audit log.
+    public var onInput: ((InputEvent) -> Void)?
     public var state: SessionState? { session?.state }
     public var isRunning: Bool { session != nil }
 
@@ -62,7 +64,13 @@ public final class SideSeat {
             keyboard: keyboardRect,
             maskRule: configuration.maskRule
         )
-        session.perform = { input in configuration.inputInterceptor?(input) ?? dispatcher.perform(input) }
+        // Described before it runs: a tap can change the screen.
+        var described: (target: String?, screen: String?)?
+        let describe = { (input: RemoteInput) in (target: dispatcher.describe(input), screen: dispatcher.screenName()) }
+        session.perform = { input in
+            described = describe(input)
+            return configuration.inputInterceptor?(input) ?? dispatcher.perform(input)
+        }
 
         let controller = OverlayViewController(strings: configuration.strings, tint: configuration.tint, allowsControl: configuration.allowsControl, showsConsent: configuration.consentHandler == nil)
         controller.onCancel = { [weak self] in self?.end() }
@@ -78,11 +86,14 @@ public final class SideSeat {
 
         let streamer = Streamer(scene: scene, configuration: configuration, session: session, keyboard: keyboardRect)
         window.onTouch = { [weak streamer] in streamer?.captureSoon(after: Streamer.userTouchCaptureDelay) }
-        session.onInput = { [weak controller, weak streamer] input, result in
+        session.onInput = { [weak self, weak controller, weak streamer] input, result in
             if case .tap(let x, let y) = input, let color = configuration.tapIndicatorColor {
                 controller?.showTouch(at: dispatcher.point(x, y), color: color)
             }
             if result.outcome == .performed { streamer?.captureSoon(after: Streamer.inputCaptureDelay) }
+            let (target, screen) = described ?? describe(input)
+            described = nil
+            self?.onInput?(InputEvent(input: input, result: result, target: target, screen: screen))
         }
         session.onStateChange = { [weak self, weak session, weak controller, weak streamer] state in
             controller?.render(state)
