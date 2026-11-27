@@ -1,8 +1,8 @@
 {
-  "name": "sideseat-relay",
+  "name": "remote-session-relay",
   "version": "0.1.0",
   "private": true,
-  "description": "Reference relay and agent console for SideSeat. For local development.",
+  "description": "Reference relay and agent console for RemoteSession. For local development.",
   "main": "relay.js",
   "scripts": {
     "start": "node relay.js"

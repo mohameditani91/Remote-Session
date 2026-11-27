@@ -1,4 +1,4 @@
-<h1 align="center">SideSeat</h1>
+<h1 align="center">RemoteSession</h1>
 
 <p align="center">
   <strong>In-app remote support for iOS.</strong><br>
@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/mohameditani91/SideSeat/actions/workflows/ci.yml"><img src="https://github.com/mohameditani91/SideSeat/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/mohameditani91/Remote-Session/actions/workflows/ci.yml"><img src="https://github.com/mohameditani91/Remote-Session/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <img src="https://img.shields.io/badge/iOS-15%2B-blue" alt="iOS 15+">
   <img src="https://img.shields.io/badge/Swift-5.9-orange" alt="Swift 5.9">
   <img src="https://img.shields.io/badge/SPM-compatible-brightgreen" alt="Swift Package Manager">
@@ -61,26 +61,26 @@ Click on the screen to tap, use the trackpad or wheel to scroll, and type with t
 Swift Package Manager: in Xcode choose **File › Add Package Dependencies…** and enter the repository URL, or add it to `Package.swift`:
 
 ```swift
-.package(url: "https://github.com/mohameditani91/SideSeat.git", from: "0.1.0")
+.package(url: "https://github.com/mohameditani91/Remote-Session.git", from: "0.1.0")
 ```
 
-Then add the `SideSeat` product to your target.
+Then add the `RemoteSession` product to your target, as `.product(name: "RemoteSession", package: "Remote-Session")` in `Package.swift`.
 
 ```swift
-import SideSeat
+import RemoteSession
 
-var configuration = SideSeat.Configuration(relay: URL(string: "wss://support.example.com/device")!)
-SideSeat.shared.start(in: windowScene, configuration: configuration)
+var configuration = RemoteSession.Configuration(relay: URL(string: "wss://support.example.com/device")!)
+RemoteSession.shared.start(in: windowScene, configuration: configuration)
 ```
 
-`SideSeat.shared.end()` stops the session, and `onStateChange` reports `connecting`, `waitingForAgent(code:)`, `awaitingConsent`, `active(mode:)` and `ended`.
+`RemoteSession.shared.end()` stops the session, and `onStateChange` reports `connecting`, `waitingForAgent(code:)`, `awaitingConsent`, `active(mode:)` and `ended`.
 
 ## What the agent can do
 
 | Input | Handled |
 | --- | --- |
-| Tap | Buttons and other controls (`touchDown`, `touchUpInside` and primary actions), switches, segmented controls, sliders, text fields, table and collection cells (`willSelect`/`shouldSelect`/`didSelect` honored), navigation bar and toolbar items (iOS 17+), popovers closing on an outside tap (delegate honored), accessibility-activatable views, `SideSeatTapGestureRecognizer`, SwiftUI views marked with `.sideSeatTarget`, `.sideSeatTapGesture` or `.sideSeatButton()`, and keys on the drawn keyboard |
-| Scroll | The scroll view under the pointer that can move in that direction, clamped to its content. Sideways over a `SideSeatSwipeable` row, it opens the row's swipe actions |
+| Tap | Buttons and other controls (`touchDown`, `touchUpInside` and primary actions), switches, segmented controls, sliders, text fields, table and collection cells (`willSelect`/`shouldSelect`/`didSelect` honored), navigation bar and toolbar items (iOS 17+), popovers closing on an outside tap (delegate honored), accessibility-activatable views, `RemoteSessionTapGestureRecognizer`, SwiftUI views marked with `.remoteSessionTarget`, `.remoteSessionTapGesture` or `.remoteSessionButton()`, and keys on the drawn keyboard |
+| Scroll | The scroll view under the pointer that can move in that direction, clamped to its content. Sideways over a `RemoteSessionSwipeable` row, it opens the row's swipe actions |
 | Type | Text, Backspace and Return into the focused field (`textFieldShouldReturn` honored) |
 | Back | Pops the visible navigation stack, or dismisses a modal |
 | Hide keyboard | Resigns the focused field |
@@ -91,28 +91,28 @@ Things it can't drive, by design: plain gesture recognizers, web views, games, a
 
 ```swift
 // UIKit: views driven by taps
-let tap = SideSeatTapGestureRecognizer(target: self, action: #selector(cardTapped))  // instead of UITapGestureRecognizer
+let tap = RemoteSessionTapGestureRecognizer(target: self, action: #selector(cardTapped))  // instead of UITapGestureRecognizer
 
 // UIKit: anything else
-extension MyCardCell: SideSeatTappable {
-    func sideSeatTap(at point: CGPoint) -> Bool {
+extension MyCardCell: RemoteSessionTappable {
+    func remoteSessionTap(at point: CGPoint) -> Bool {
         toggleExpanded()
         return true
     }
 }
 
 // UIKit: rows with swipe actions, for example SwipeCellKit cells
-extension MyRowCell: SideSeatSwipeable {
-    func sideSeatSwipe(by delta: CGVector) -> Bool {
+extension MyRowCell: RemoteSessionSwipeable {
+    func remoteSessionSwipe(by delta: CGVector) -> Bool {
         showSwipe(orientation: delta.dx > 0 ? .right : .left)   // scrolling right is a finger swiping left
         return true
     }
 }
 
 // SwiftUI
-Card().sideSeatTapGesture { likes += 1 }   // instead of .onTapGesture
-Button("Pay") { pay() }.sideSeatButton()   // keeps the button's style
-Toggle("Done", isOn: $done).sideSeatTarget { done.toggle() }
+Card().remoteSessionTapGesture { likes += 1 }   // instead of .onTapGesture
+Button("Pay") { pay() }.remoteSessionButton()   // keeps the button's style
+Toggle("Done", isOn: $done).remoteSessionTarget { done.toggle() }
 ```
 
 ## Video
@@ -130,7 +130,7 @@ Video costs almost no main-thread time, so the picture stays smooth while the us
 Wrap anything the user should approve. When the agent's input led to it, the user sees an Allow / Deny card and agent input waits for the answer. When the user did it themselves, the completion runs straight away.
 
 ```swift
-SideSeat.shared.confirmAgentAction("Delete \"\(task.title)\"") { allowed in
+RemoteSession.shared.confirmAgentAction("Delete \"\(task.title)\"") { allowed in
     if allowed { store.delete(task) }
 }
 ```
@@ -140,7 +140,7 @@ SideSeat.shared.confirmAgentAction("Delete \"\(task.title)\"") { allowed in
 ## Audit log
 
 ```swift
-SideSeat.shared.onInput = { event in
+RemoteSession.shared.onInput = { event in
     log("\(event.input) on \(event.target ?? "nothing") in \(event.screen ?? "?"): \(event.result.outcome)")
 }
 ```
@@ -150,8 +150,8 @@ SideSeat.shared.onInput = { event in
 ## Masking
 
 ```swift
-pinLabel.isSideSeatMasked = true                               // a UIKit view
-Text(cardNumber).sideSeatMasked()                              // a SwiftUI view
+pinLabel.isRemoteSessionMasked = true                               // a UIKit view
+Text(cardNumber).remoteSessionMasked()                              // a SwiftUI view
 configuration.maskRule = MaskRules.screens([PaymentViewController.self])   // whole screens
 ```
 
@@ -162,7 +162,7 @@ Secure text fields, including SwiftUI `SecureField`, are always masked. Masks ar
 | Configuration | Use it to |
 | --- | --- |
 | `request` | Add authentication headers or query items to the relay connection |
-| `transport` | Replace the WebSocket with your own `SideSeatTransport` |
+| `transport` | Replace the WebSocket with your own `RemoteSessionTransport` |
 | `inputInterceptor` | Block or handle agent input yourself, for example on payment screens |
 | `consentHandler` | Show your own consent UI instead of the built-in card |
 | `maskRule` | Decide which views to mask |

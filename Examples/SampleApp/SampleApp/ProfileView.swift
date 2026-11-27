@@ -1,5 +1,5 @@
 import SwiftUI
-import SideSeat
+import RemoteSession
 
 final class ProfileHostingController: UIHostingController<ProfileView> {
     init() {
@@ -39,12 +39,12 @@ struct ProfileView: View {
                     .padding(.vertical, 8)
                     .contentShape(Rectangle())
                     .onTapGesture { likes += 1 }
-                    .sideSeatTarget { likes += 1 }
+                    .remoteSessionTarget { likes += 1 }
                 }
 
                 Section("Private") {
                     Text("Recovery key: K7QD-29XF-M4LP")
-                        .sideSeatMasked()
+                        .remoteSessionMasked()
                 }
 
                 Section("History") {

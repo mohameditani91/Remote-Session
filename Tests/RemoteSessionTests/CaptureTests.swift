@@ -1,6 +1,6 @@
 import UIKit
 import Testing
-@testable import SideSeat
+@testable import RemoteSession
 
 private final class PinScreen: UIViewController {}
 
@@ -18,7 +18,7 @@ private final class PinScreen: UIViewController {}
         let secret = UITextField(frame: CGRect(x: 10, y: 10, width: 100, height: 30))
         secret.isSecureTextEntry = true
         let flagged = UIView(frame: CGRect(x: 200, y: 10, width: 50, height: 50))
-        flagged.isSideSeatMasked = true
+        flagged.isRemoteSessionMasked = true
         let plain = UILabel(frame: CGRect(x: 300, y: 10, width: 50, height: 20))
         [secret, flagged, plain].forEach(w.addSubview)
 
@@ -31,7 +31,7 @@ private final class PinScreen: UIViewController {}
     @Test func masksUnderALaterOpaqueViewAreDropped() {
         let w = window()
         let flagged = UIView(frame: CGRect(x: 100, y: 100, width: 50, height: 50))
-        flagged.isSideSeatMasked = true
+        flagged.isRemoteSessionMasked = true
         let cover = UIView(frame: CGRect(x: 0, y: 0, width: 400, height: 400))
         cover.backgroundColor = .white
         [flagged, cover].forEach(w.addSubview)
@@ -46,10 +46,10 @@ private final class PinScreen: UIViewController {}
         let clip = UIView(frame: CGRect(x: 0, y: 0, width: 100, height: 100))
         clip.clipsToBounds = true
         let flagged = UIView(frame: CGRect(x: 50, y: 50, width: 200, height: 200))
-        flagged.isSideSeatMasked = true
+        flagged.isRemoteSessionMasked = true
         clip.addSubview(flagged)
         let hidden = UIView(frame: CGRect(x: 300, y: 300, width: 50, height: 50))
-        hidden.isSideSeatMasked = true
+        hidden.isRemoteSessionMasked = true
         hidden.isHidden = true
         [clip, hidden].forEach(w.addSubview)
 

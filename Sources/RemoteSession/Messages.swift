@@ -38,7 +38,7 @@ public enum RemoteInput: Equatable {
     case hideKeyboard
 }
 
-/// One agent input, as reported to `SideSeat.onInput`.
+/// One agent input, as reported to `RemoteSession.onInput`.
 public struct InputEvent: Equatable {
     public let input: RemoteInput
     public let result: InputResult

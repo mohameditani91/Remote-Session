@@ -1,5 +1,5 @@
 import Testing
-@testable import SideSeat
+@testable import RemoteSession
 
 @Suite struct ApprovalTests {
 

@@ -1,7 +1,7 @@
 import Foundation
 
 /// Carries messages between the app and a relay. Callbacks must be delivered on the main queue.
-public protocol SideSeatTransport: AnyObject {
+public protocol RemoteSessionTransport: AnyObject {
     var onText: ((String) -> Void)? { get set }
     var onClose: ((Error?) -> Void)? { get set }
     func connect()
@@ -11,7 +11,7 @@ public protocol SideSeatTransport: AnyObject {
 }
 
 /// The default transport: a WebSocket to the relay. Put authentication in the request (headers or query).
-public final class WebSocketTransport: NSObject, SideSeatTransport {
+public final class WebSocketTransport: NSObject, RemoteSessionTransport {
 
     public var onText: ((String) -> Void)?
     public var onClose: ((Error?) -> Void)?

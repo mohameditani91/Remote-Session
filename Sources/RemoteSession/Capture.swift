@@ -44,7 +44,7 @@ enum Compositor {
                 }
             }
             if let keyboard {
-                let sensitive = KeyboardPlaceholder.isSensitive(UIResponder.sideSeatFirstResponder(), rule: maskRule)
+                let sensitive = KeyboardPlaceholder.isSensitive(UIResponder.remoteSessionFirstResponder(), rule: maskRule)
                 KeyboardPlaceholder.draw(in: keyboard, dark: scene.traitCollection.userInterfaceStyle == .dark, blurred: sensitive)
             }
         }.cgImage
@@ -100,9 +100,9 @@ final class Streamer: FrameStreamer {
     static let userTouchCaptureDelay: TimeInterval = 0.6
 
     private weak var scene: UIWindowScene?
-    private let configuration: SideSeat.Configuration
+    private let configuration: RemoteSession.Configuration
     private let session: Session
-    private let encodeQueue = DispatchQueue(label: "SideSeat.encode", qos: .userInitiated)
+    private let encodeQueue = DispatchQueue(label: "RemoteSession.encode", qos: .userInitiated)
     private var policy: FrameRatePolicy
     private var timer: Timer?
     private var inFlight = false
@@ -112,7 +112,7 @@ final class Streamer: FrameStreamer {
 
     private let keyboard: () -> CGRect?
 
-    init(scene: UIWindowScene, configuration: SideSeat.Configuration, session: Session, keyboard: @escaping () -> CGRect? = { nil }) {
+    init(scene: UIWindowScene, configuration: RemoteSession.Configuration, session: Session, keyboard: @escaping () -> CGRect? = { nil }) {
         self.scene = scene
         self.keyboard = keyboard
         self.configuration = configuration

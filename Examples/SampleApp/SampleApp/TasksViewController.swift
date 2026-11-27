@@ -1,5 +1,5 @@
 import UIKit
-import SideSeat
+import RemoteSession
 
 struct Todo {
     let number: Int
@@ -82,7 +82,7 @@ final class TaskDetailViewController: UIViewController, UIPopoverPresentationCon
         secret.configuration?.title = "Recovery key"
         secret.addAction(UIAction { [weak self] _ in
             // When the agent taps this, the user is asked first.
-            SideSeat.shared.confirmAgentAction("Open the recovery key") { allowed in
+            RemoteSession.shared.confirmAgentAction("Open the recovery key") { allowed in
                 guard allowed else { return }
                 self?.navigationController?.pushViewController(RecoveryKeyViewController(), animated: true)
             }

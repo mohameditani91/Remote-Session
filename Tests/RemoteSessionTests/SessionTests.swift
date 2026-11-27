@@ -1,8 +1,8 @@
 import Foundation
 import Testing
-@testable import SideSeat
+@testable import RemoteSession
 
-final class FakeTransport: SideSeatTransport {
+final class FakeTransport: RemoteSessionTransport {
     var onText: ((String) -> Void)?
     var onClose: ((Error?) -> Void)?
     var sent: [String] = []

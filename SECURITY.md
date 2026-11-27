@@ -1,6 +1,6 @@
 # Security policy
 
-SideSeat lets someone outside the device see and operate an app, so security reports are taken seriously.
+RemoteSession lets someone outside the device see and operate an app, so security reports are taken seriously.
 
 ## Reporting a vulnerability
 
@@ -10,7 +10,7 @@ Include what you found, the steps to reproduce it, and the impact you expect. Yo
 
 ## Supported versions
 
-Only the latest release gets security fixes while SideSeat is below 1.0.
+Only the latest release gets security fixes while RemoteSession is below 1.0.
 
 ## In scope
 

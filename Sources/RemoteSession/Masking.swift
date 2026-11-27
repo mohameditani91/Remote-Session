@@ -6,7 +6,7 @@ private var maskedKey: UInt8 = 0
 
 public extension UIView {
     /// Covers this view (and everything inside it) with a placeholder in frames sent to the agent.
-    var isSideSeatMasked: Bool {
+    var isRemoteSessionMasked: Bool {
         get { (objc_getAssociatedObject(self, &maskedKey) as? Bool) ?? false }
         set { objc_setAssociatedObject(self, &maskedKey, newValue, .OBJC_ASSOCIATION_RETAIN_NONATOMIC) }
     }
@@ -14,7 +14,7 @@ public extension UIView {
 
 public extension View {
     /// Covers this view with a placeholder in frames sent to the agent.
-    func sideSeatMasked() -> some View {
+    func remoteSessionMasked() -> some View {
         background(MaskMarker())
     }
 }
@@ -33,7 +33,7 @@ private struct MaskMarker: UIViewRepresentable {
     func makeUIView(context: Context) -> UIView {
         let view = UIView()
         view.isUserInteractionEnabled = false
-        view.isSideSeatMasked = true
+        view.isRemoteSessionMasked = true
         return view
     }
 
@@ -65,7 +65,7 @@ enum MaskCollector {
     }
 
     private static func isMasked(_ view: UIView, rule: ((UIView) -> Bool)?) -> Bool {
-        if view.isSideSeatMasked { return true }
+        if view.isRemoteSessionMasked { return true }
         if let field = view as? UITextField, field.isSecureTextEntry { return true }
         return rule?(view) ?? false
     }

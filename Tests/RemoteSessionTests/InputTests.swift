@@ -1,6 +1,6 @@
 import UIKit
 import Testing
-@testable import SideSeat
+@testable import RemoteSession
 
 private final class Counter {
     var count = 0
@@ -31,18 +31,18 @@ private final class UnhandledLists: NSObject, UICollectionViewDataSource, UIColl
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell { UITableViewCell() }
 }
 
-private final class TappableView: UIView, SideSeatTappable {
+private final class TappableView: UIView, RemoteSessionTappable {
     var points: [CGPoint] = []
-    func sideSeatTap(at point: CGPoint) -> Bool {
+    func remoteSessionTap(at point: CGPoint) -> Bool {
         points.append(point)
         return true
     }
 }
 
-private final class SwipeableView: UIView, SideSeatSwipeable {
+private final class SwipeableView: UIView, RemoteSessionSwipeable {
     var answer = true
     var deltas: [CGVector] = []
-    func sideSeatSwipe(by delta: CGVector) -> Bool {
+    func remoteSessionSwipe(by delta: CGVector) -> Bool {
         deltas.append(delta)
         return answer
     }

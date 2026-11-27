@@ -2,37 +2,37 @@ import UIKit
 import SwiftUI
 
 /// Adopt on views whose taps aren't plain controls, such as gesture-driven cells.
-public protocol SideSeatTappable: AnyObject {
+public protocol RemoteSessionTappable: AnyObject {
     /// `point` is in the view's own coordinates. Return false to let the tap reach the view's ancestors.
-    func sideSeatTap(at point: CGPoint) -> Bool
+    func remoteSessionTap(at point: CGPoint) -> Bool
 }
 
 /// Adopt on rows with swipe actions, for example SwipeCellKit cells. A sideways agent scroll over the row calls it.
-public protocol SideSeatSwipeable: AnyObject {
+public protocol RemoteSessionSwipeable: AnyObject {
     /// `delta` is the scroll in points: positive `dx` scrolls right, like a finger swiping left. Return false when there is nothing to reveal.
-    func sideSeatSwipe(by delta: CGVector) -> Bool
+    func remoteSessionSwipe(by delta: CGVector) -> Bool
 }
 
 public extension View {
     /// Lets the agent trigger `action` by tapping this view. Use it on SwiftUI views driven by gestures.
-    func sideSeatTarget(_ action: @escaping () -> Void) -> some View {
+    func remoteSessionTarget(_ action: @escaping () -> Void) -> some View {
         background(TargetMarker(action: action))
     }
 
     /// `onTapGesture` that the agent can also trigger.
-    func sideSeatTapGesture(perform action: @escaping () -> Void) -> some View {
-        onTapGesture(perform: action).sideSeatTarget(action)
+    func remoteSessionTapGesture(perform action: @escaping () -> Void) -> some View {
+        onTapGesture(perform: action).remoteSessionTarget(action)
     }
 
     /// Lets the agent press the buttons inside this view. Keeps any enclosing button style.
-    func sideSeatButton() -> some View {
+    func remoteSessionButton() -> some View {
         buttonStyle(TargetButtonStyle())
     }
 }
 
 private struct TargetButtonStyle: PrimitiveButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
-        Button(configuration).sideSeatTarget(configuration.trigger)
+        Button(configuration).remoteSessionTarget(configuration.trigger)
     }
 }
 
@@ -51,7 +51,7 @@ private struct TargetMarker: UIViewRepresentable {
 }
 
 /// A single-tap recognizer the agent can trigger. Use it in place of `UITapGestureRecognizer`.
-open class SideSeatTapGestureRecognizer: UITapGestureRecognizer {
+open class RemoteSessionTapGestureRecognizer: UITapGestureRecognizer {
 
     private struct Entry {
         weak var target: AnyObject?
@@ -115,7 +115,7 @@ final class InputDispatcher {
     private let keyboard: () -> CGRect?
     private let maskRule: ((UIView) -> Bool)?
 
-    init(windows: @escaping () -> [UIWindow], bounds: @escaping () -> CGRect, firstResponder: @escaping () -> UIResponder? = UIResponder.sideSeatFirstResponder, keyboard: @escaping () -> CGRect? = { nil }, maskRule: ((UIView) -> Bool)? = nil) {
+    init(windows: @escaping () -> [UIWindow], bounds: @escaping () -> CGRect, firstResponder: @escaping () -> UIResponder? = UIResponder.remoteSessionFirstResponder, keyboard: @escaping () -> CGRect? = { nil }, maskRule: ((UIView) -> Bool)? = nil) {
         self.windows = windows
         self.bounds = bounds
         self.firstResponder = firstResponder
@@ -231,7 +231,7 @@ final class InputDispatcher {
         if #available(iOS 17.0, *), let result = tapBarItem(hit: hit) { return result }
         var view: UIView? = hit.view
         while let current = view, current !== hit.window {
-            if current.gestureRecognizers?.contains(where: { ($0 as? SideSeatTapGestureRecognizer)?.remoteTap(atWindowPoint: hit.point) == true }) == true { return .performed }
+            if current.gestureRecognizers?.contains(where: { ($0 as? RemoteSessionTapGestureRecognizer)?.remoteTap(atWindowPoint: hit.point) == true }) == true { return .performed }
             if let result = activate(current, at: hit.window.convert(hit.point, to: current)) { return result }
             view = current.superview
         }
@@ -301,8 +301,8 @@ final class InputDispatcher {
     }
 
     private func activate(_ view: UIView, at point: CGPoint) -> InputResult? {
-        if let tappable = view as? SideSeatTappable {
-            return tappable.sideSeatTap(at: point) ? .performed : nil
+        if let tappable = view as? RemoteSessionTappable {
+            return tappable.remoteSessionTap(at: point) ? .performed : nil
         }
         if let control = view as? UIControl, !(control is UITextField), control.isManagedBySwiftUI {
             return .nothing("swiftUIControl")
@@ -523,10 +523,10 @@ final class InputDispatcher {
         let below = Self.scrollViews(at: hit.point, under: hit.view, in: hit.window)
         let ancestors = chain.compactMap { $0 as? UIScrollView }.filter(\.isScrollEnabled)
         var declinedSwipe = false
-        if !vertical, let index = chain.firstIndex(where: { $0 is SideSeatSwipeable }), let swipeable = chain[index] as? SideSeatSwipeable {
+        if !vertical, let index = chain.firstIndex(where: { $0 is RemoteSessionSwipeable }), let swipeable = chain[index] as? RemoteSessionSwipeable {
             let inside = below + chain[..<index].compactMap { $0 as? UIScrollView }.filter(\.isScrollEnabled)
             if !inside.contains(where: { $0.canScroll(vertically: false) }) {
-                if swipeable.sideSeatSwipe(by: delta) { return .performed }
+                if swipeable.remoteSessionSwipe(by: delta) { return .performed }
                 declinedSwipe = true
             }
         }
@@ -637,7 +637,7 @@ private extension UIView {
 }
 
 private extension UIControl {
-    /// Controls whose only targets are SwiftUI's own report `swiftUIControl` instead of being fired; mark them with `.sideSeatTarget`.
+    /// Controls whose only targets are SwiftUI's own report `swiftUIControl` instead of being fired; mark them with `.remoteSessionTarget`.
     var isManagedBySwiftUI: Bool {
         // Read through KVC: bridging `allTargets` to Swift crashes on targets that aren't NSObjects.
         guard let targets = value(forKey: "allTargets") as? NSSet, targets.count > 0 else { return false }
@@ -666,13 +666,13 @@ extension UIResponder {
 
     private static weak var found: UIResponder?
 
-    static func sideSeatFirstResponder() -> UIResponder? {
+    static func remoteSessionFirstResponder() -> UIResponder? {
         found = nil
-        UIApplication.shared.sendAction(#selector(UIResponder.sideSeatCaptureFirstResponder(_:)), to: nil, from: nil, for: nil)
+        UIApplication.shared.sendAction(#selector(UIResponder.remoteSessionCaptureFirstResponder(_:)), to: nil, from: nil, for: nil)
         return found
     }
 
-    @objc private func sideSeatCaptureFirstResponder(_ sender: Any?) {
+    @objc private func remoteSessionCaptureFirstResponder(_ sender: Any?) {
         UIResponder.found = self
     }
 }

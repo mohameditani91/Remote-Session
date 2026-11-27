@@ -1,6 +1,6 @@
 import UIKit
 import Testing
-@testable import SideSeat
+@testable import RemoteSession
 
 private final class Rows: NSObject, UITableViewDataSource, UICollectionViewDataSource {
     let texts: [String]
@@ -103,7 +103,7 @@ private final class Rows: NSObject, UITableViewDataSource, UICollectionViewDataS
     @Test func masksHideWhatWasTapped() {
         let window = window()
         let pad = UIView(frame: CGRect(x: 100, y: 100, width: 300, height: 300))
-        pad.isSideSeatMasked = true
+        pad.isRemoteSessionMasked = true
         let key = UIButton(type: .system)
         key.setTitle("4", for: .normal)
         key.frame = CGRect(x: 10, y: 10, width: 80, height: 80)
