@@ -73,6 +73,23 @@ import Testing
         #expect(points.contains { color(sharp, x: $0.x, y: $0.y) != color(blurred, x: $0.x, y: $0.y) })
     }
 
+    @Test func maskedAreasShowABlurredPlaceholderAndNothingUnderIt() throws {
+        let bounds = CGRect(x: 0, y: 0, width: 400, height: 300)
+        let mask = CGRect(x: 40, y: 40, width: 200, height: 120)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.preferredRange = .standard
+        let image = try #require(UIGraphicsImageRenderer(bounds: bounds, format: format).image { context in
+            UIColor.red.setFill()
+            context.fill(bounds)
+            #expect(MaskPlaceholder.draw(in: mask))
+        }.cgImage)
+
+        let inside = stride(from: 45, to: 235, by: 9).flatMap { x in stride(from: 45, to: 155, by: 9).map { color(image, x: x, y: $0) } }
+        #expect(inside.allSatisfy { $0.prefix(3).allSatisfy { (180...240).contains($0) } })
+        #expect(color(image, x: 300, y: 250).prefix(3) == [255, 0, 0])
+    }
+
     @Test func passwordAndHiddenFieldsAreSensitive() {
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 800, height: 600))
         window.isHidden = false

@@ -39,7 +39,8 @@ enum Compositor {
             for window in WindowSelection.capturable(scene.windows) {
                 window.drawHierarchy(in: window.convert(window.bounds, to: space), afterScreenUpdates: false)
                 for rect in MaskCollector.rects(in: window, rule: maskRule) {
-                    context.fill(window.convert(rect, to: space))
+                    let cover = window.convert(rect, to: space)
+                    if !MaskPlaceholder.draw(in: cover) { context.fill(cover) }
                 }
             }
             if let keyboard {
