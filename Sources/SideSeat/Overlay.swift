@@ -14,12 +14,21 @@ public struct SideSeatStrings {
     public var viewOnly = "View only"
     public var end = "End"
     public var cancel = "Cancel"
+    public var approvalTitle = "Allow support to do this?"
+    public var approvalMessage: (String) -> String = { $0 }
+    public var allow = "Allow"
 
     public init() {}
 }
 
 final class OverlayWindow: UIWindow {
+    // Views that attach to the key window, like loading spinners, would land here and miss the agent's stream.
+    override var canBecomeKey: Bool { false }
+
+    var onTouch: (() -> Void)?
+
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        if event?.type == .touches { onTouch?() }
         let hit = super.hitTest(point, with: event)
         return hit === self || hit === rootViewController?.view ? nil : hit
     }
@@ -41,6 +50,7 @@ final class OverlayViewController: UIViewController {
     var onDeny: (() -> Void)?
     var onViewOnly: (() -> Void)?
     var onEnd: (() -> Void)?
+    var onApprove: ((Bool) -> Void)?
 
     private let strings: SideSeatStrings
     private let tint: UIColor
@@ -63,6 +73,8 @@ final class OverlayViewController: UIViewController {
     private var bannerX: NSLayoutConstraint?
     private var bannerY: NSLayoutConstraint?
     private var bannerMoved = false
+    private var lastState: SessionState = .connecting
+    private var approvalAction: String?
 
     init(strings: SideSeatStrings, tint: UIColor, allowsControl: Bool, showsConsent: Bool) {
         self.strings = strings
@@ -87,8 +99,14 @@ final class OverlayViewController: UIViewController {
         bannerY?.constant = view.safeAreaInsets.top + 12 + banner.bounds.height / 2
     }
 
+    func askApproval(_ action: String?) {
+        approvalAction = action
+        render(lastState)
+    }
+
     func render(_ state: SessionState) {
         loadViewIfNeeded()
+        lastState = state
         backdrop.isHidden = true
         banner.isHidden = true
         switch state {
@@ -109,8 +127,69 @@ final class OverlayViewController: UIViewController {
             viewOnlyButton.isHidden = mode != .control
             view.layoutIfNeeded()
             if bannerMoved { moveBanner(to: banner.center) }
+            if let approvalAction {
+                showCard(title: strings.approvalTitle, code: nil, message: strings.approvalMessage(approvalAction), actions: [
+                    (strings.allow, .filled, { [weak self] in self?.onApprove?(true) }),
+                    (strings.deny, .destructive, { [weak self] in self?.onApprove?(false) })
+                ])
+            }
         case .ended:
             break
+        }
+    }
+
+    /// Marks an agent tap for the user: a dot that presses in, with two ripples spreading from it.
+    /// With Reduce Motion on, a still ring and dot fade out instead.
+    func showTouch(at point: CGPoint, color: UIColor) {
+        loadViewIfNeeded()
+        let size: CGFloat = 88
+        let marker = UIView(frame: CGRect(x: point.x - size / 2, y: point.y - size / 2, width: size, height: size))
+        marker.isUserInteractionEnabled = false
+        view.insertSubview(marker, belowSubview: backdrop)
+
+        let reduceMotion = UIAccessibility.isReduceMotionEnabled
+        for delay in reduceMotion ? [0] : [0, 0.2] {
+            let ripple = UIView(frame: marker.bounds)
+            ripple.layer.cornerRadius = size / 2
+            ripple.layer.borderWidth = 3
+            ripple.layer.borderColor = color.cgColor
+            ripple.backgroundColor = color.withAlphaComponent(0.18)
+            marker.addSubview(ripple)
+            guard !reduceMotion else {
+                ripple.transform = CGAffineTransform(scaleX: 0.6, y: 0.6)
+                continue
+            }
+            ripple.transform = CGAffineTransform(scaleX: 0.25, y: 0.25)
+            ripple.alpha = 0
+            UIView.animate(withDuration: 0.05, delay: delay) { ripple.alpha = 1 }
+            UIView.animate(withDuration: 0.75, delay: delay, options: .curveEaseOut) {
+                ripple.transform = .identity
+            }
+            UIView.animate(withDuration: 0.55, delay: delay + 0.2, options: .curveEaseIn) {
+                ripple.alpha = 0
+            }
+        }
+
+        let dotSize: CGFloat = 26
+        let dot = UIView(frame: CGRect(x: (size - dotSize) / 2, y: (size - dotSize) / 2, width: dotSize, height: dotSize))
+        dot.backgroundColor = color
+        dot.layer.cornerRadius = dotSize / 2
+        dot.layer.borderWidth = 3
+        dot.layer.borderColor = UIColor.white.cgColor
+        dot.layer.shadowColor = UIColor.black.cgColor
+        dot.layer.shadowOpacity = 0.45
+        dot.layer.shadowRadius = 4
+        dot.layer.shadowOffset = .zero
+        marker.addSubview(dot)
+        if !reduceMotion {
+            dot.transform = CGAffineTransform(scaleX: 1.5, y: 1.5)
+            UIView.animate(withDuration: 0.25, delay: 0, usingSpringWithDamping: 0.55, initialSpringVelocity: 0) { dot.transform = .identity }
+        }
+
+        UIView.animate(withDuration: 0.35, delay: 1.1, options: .curveEaseIn) {
+            marker.alpha = 0
+        } completion: { _ in
+            marker.removeFromSuperview()
         }
     }
 

@@ -23,17 +23,19 @@ A support agent opens a web page, types the 6-digit code shown in your app, and 
 ## Features
 
 - **App Store safe.** Public APIs only. No touch synthesis, no private selectors. Agent input is replayed the way UIKit itself would handle it: control actions, table and collection selection through their delegates, popovers closing through their delegates, scroll offsets, text input.
-- **Consent first.** Nothing streams until the user allows viewing, or viewing and control. The user can drop to view-only or end the session at any time from a banner they can drag out of the way.
-- **Masking.** Secure text fields are always painted black. Mark anything else with one property, or mask whole screens with a rule.
-- **No dependencies.** About 2,000 lines of Swift. iOS 15+, UIKit and SwiftUI.
+- **Consent first.** Nothing streams until the user allows viewing, or viewing and control. The user can drop to view-only or end the session at any time from a banner they can drag out of the way, and an animated marker shows each tap the agent makes.
+- **Ask before it matters.** One call asks the user to allow an action the agent started, like deleting or paying, and lets it straight through when the user started it.
+- **Masking.** Secure text fields are always covered with a blurred placeholder. Mark anything else with one property, or mask whole screens with a rule.
+- **Video or stills.** Opt in to H.264 video from ReplayKit at up to 30 fps when the agent's browser can decode it, with JPEG stills otherwise.
+- **No dependencies.** About 2,800 lines of Swift. iOS 15+, UIKit and SwiftUI.
 - **Bring your own backend.** A small reference relay and agent console are included for local development. The transport is a protocol, so you can run sessions over your own infrastructure.
 
 ## See it in action
 
-An agent opens a task, marks it done, sets the priority, types a comment and saves, all from the browser. Every input shows up in the activity log with its result.
+Over H.264 video, an agent opens a task, marks it done, sets the priority, types a comment with the drawn keyboard showing, and saves. Then they try to open the recovery key: the user is asked first, allows it on the phone, and the screen reaches the agent masked. Every input shows up in the activity log with its result.
 
 <p align="center">
-  <img src="docs/demo.gif" alt="An agent driving the sample app from the web console" width="900">
+  <img src="docs/demo.gif" alt="An agent driving the sample app from the web console over video, with an approval prompt and a masked screen" width="900">
 </p>
 
 | Pairing and consent | What the user sees vs. what the agent sees |
@@ -77,15 +79,21 @@ SideSeat.shared.start(in: windowScene, configuration: configuration)
 
 | Input | Handled |
 | --- | --- |
-| Tap | Buttons and other controls, switches, segmented controls, sliders, text fields, table and collection cells (`willSelect`/`shouldSelect`/`didSelect` honored), popovers closing on an outside tap (delegate honored), accessibility-activatable views, SwiftUI views marked with `.sideSeatTarget` |
-| Scroll | The scroll view under the pointer that can move in that direction, clamped to its content |
+| Tap | Buttons and other controls (`touchDown`, `touchUpInside` and primary actions), switches, segmented controls, sliders, text fields, table and collection cells (`willSelect`/`shouldSelect`/`didSelect` honored), navigation bar and toolbar items (iOS 17+), popovers closing on an outside tap (delegate honored), accessibility-activatable views, `SideSeatTapGestureRecognizer`, SwiftUI views marked with `.sideSeatTarget`, `.sideSeatTapGesture` or `.sideSeatButton()`, and keys on the drawn keyboard |
+| Scroll | The scroll view under the pointer that can move in that direction, clamped to its content. Sideways over a `SideSeatSwipeable` row, it opens the row's swipe actions |
 | Type | Text, Backspace and Return into the focused field (`textFieldShouldReturn` honored) |
 | Back | Pops the visible navigation stack, or dismisses a modal |
+| Hide keyboard | Resigns the focused field |
 
-Things it can't drive, by design: custom gesture recognizers, web views, games, and SwiftUI gestures without a marker. Make them reachable with:
+The system keyboard runs outside your app, so the agent sees a drawn keyboard in its place and can tap its keys. It is blurred and locked while a password or masked field has focus.
+
+Things it can't drive, by design: plain gesture recognizers, web views, games, and SwiftUI gestures and controls (`Toggle`, `Slider`, `Picker`) without a marker. A tap on an unmarked SwiftUI control reports `swiftUIControl` rather than a false success. Make them reachable with:
 
 ```swift
-// UIKit: views driven by gestures
+// UIKit: views driven by taps
+let tap = SideSeatTapGestureRecognizer(target: self, action: #selector(cardTapped))  // instead of UITapGestureRecognizer
+
+// UIKit: anything else
 extension MyCardCell: SideSeatTappable {
     func sideSeatTap(at point: CGPoint) -> Bool {
         toggleExpanded()
@@ -93,11 +101,51 @@ extension MyCardCell: SideSeatTappable {
     }
 }
 
-// SwiftUI: views driven by onTapGesture
-Card()
-    .onTapGesture { likes += 1 }
-    .sideSeatTarget { likes += 1 }
+// UIKit: rows with swipe actions, for example SwipeCellKit cells
+extension MyRowCell: SideSeatSwipeable {
+    func sideSeatSwipe(by delta: CGVector) -> Bool {
+        showSwipe(orientation: delta.dx > 0 ? .right : .left)   // scrolling right is a finger swiping left
+        return true
+    }
+}
+
+// SwiftUI
+Card().sideSeatTapGesture { likes += 1 }   // instead of .onTapGesture
+Button("Pay") { pay() }.sideSeatButton()   // keeps the button's style
+Toggle("Done", isOn: $done).sideSeatTarget { done.toggle() }
 ```
+
+## Video
+
+```swift
+configuration.video = true
+```
+
+The app then streams H.264 video captured with ReplayKit to any agent whose browser can decode it (WebCodecs, in current Chrome, Edge and Safari), and JPEG stills to the rest. iOS asks the user to allow screen recording first. If they don't, or capture fails or goes quiet, the session carries on with stills.
+
+Video costs almost no main-thread time, so the picture stays smooth while the user scrolls. Masks and the drawn keyboard are painted over each recorded frame from a snapshot taken right after it arrives, together with the previous snapshot, so a masked view that moves stays covered. On the simulator, where ReplayKit doesn't capture, frames come from window snapshots at 15 fps.
+
+## Ask before sensitive actions
+
+Wrap anything the user should approve. When the agent's input led to it, the user sees an Allow / Deny card and agent input waits for the answer. When the user did it themselves, the completion runs straight away.
+
+```swift
+SideSeat.shared.confirmAgentAction("Delete \"\(task.title)\"") { allowed in
+    if allowed { store.delete(task) }
+}
+```
+
+`isAgentAction` stays true for 90 seconds after the agent's last input that did something, and ends as soon as the user touches the screen.
+
+## Audit log
+
+```swift
+SideSeat.shared.onInput = { event in
+    log("\(event.input) on \(event.target ?? "nothing") in \(event.screen ?? "?"): \(event.result.outcome)")
+}
+```
+
+`target` is a short name such as `"Save" button`, `"Email" field` or `row 3`. It comes from titles, placeholders and accessibility labels; typed text, row text, labels and masked areas are never read.
 
 ## Masking
 
@@ -107,7 +155,7 @@ Text(cardNumber).sideSeatMasked()                              // a SwiftUI view
 configuration.maskRule = MaskRules.screens([PaymentViewController.self])   // whole screens
 ```
 
-Secure text fields, including SwiftUI `SecureField`, are always masked. Masks are drawn into each frame before it leaves the device, and they follow scrolling.
+Secure text fields, including SwiftUI `SecureField`, are always masked. Masks are drawn into each frame before it leaves the device, and they follow scrolling. The agent sees blurred blank tiles there, never a blur of what is underneath.
 
 ## Extension points
 
@@ -117,22 +165,26 @@ Secure text fields, including SwiftUI `SecureField`, are always masked. Masks ar
 | `transport` | Replace the WebSocket with your own `SideSeatTransport` |
 | `inputInterceptor` | Block or handle agent input yourself, for example on payment screens |
 | `consentHandler` | Show your own consent UI instead of the built-in card |
-| `maskRule` | Decide which views to paint black |
+| `maskRule` | Decide which views to mask |
 | `allowsControl` | Offer viewing only |
+| `video` | Stream H.264 video when the agent's browser can decode it |
 | `framesPerSecond`, `scale`, `jpegQuality`, `mainThreadBudget` | Trade picture quality for bandwidth and main-thread time |
 | `strings`, `tint` | Localize and theme the built-in UI |
+| `tapIndicatorColor` | Change or hide (`nil`) the marker shown at each agent tap |
 
 ## Protocol
 
-JSON text messages plus binary JPEG frames over one WebSocket per side. The relay pairs one app with one agent by code.
+JSON text messages plus binary frames over one WebSocket per side. The relay pairs one app with one agent by code.
 
 | From | Message |
 | --- | --- |
-| Relay → app | `session {code}`, `agentJoined {agentId, agentName}`, `agentLeft`, `input {id, action, …}`, `end {reason}` |
-| App → relay | `consent {mode}`, `denied`, `screen {width, height}`, `result {id, outcome, reason}`, `mode {mode}`, `end {reason}`, binary JPEG frames |
-| Agent → relay | `input {id, action: tap\|scroll\|text\|key\|back, …}`, `end` |
+| Relay → app | `session {code}`, `agentJoined {agentId, agentName, video}`, `agentLeft`, `input {id, action, …}`, `requestKeyframe`, `end {reason}` |
+| App → relay | `consent {mode}`, `denied`, `screen {width, height}`, `result {id, outcome, reason}`, `mode {mode}`, `approval {action, allowed?}`, `end {reason}`, binary frames |
+| Agent → relay | `input {id, action: tap\|scroll\|text\|key\|back\|hideKeyboard, …}`, `requestKeyframe`, `end` |
 
 Coordinates are normalized to 0…1 of the app's window scene.
+
+Binary frames are either a bare JPEG (first byte `0xFF`) or one H.264 access unit with a 7-byte header: version `1`, kind `2`, a big-endian `uint32` sequence number, and a flags byte whose bit 0 marks a keyframe. Payloads are Annex-B, and every keyframe carries its SPS and PPS. The app sends video only when `agentJoined.video` lists `h264`; the reference console asks for it by adding `video=h264` to its join URL when `VideoDecoder` supports H.264. After a sequence gap or a decoder error it sends `requestKeyframe`, and the app answers with a keyframe within half a second.
 
 ## Before you ship it
 
@@ -140,8 +192,9 @@ The relay in `Examples/Relay` is a starting point for development. It has an opt
 
 ## Limitations
 
-- Each frame is drawn on the main thread with `drawHierarchy`. Frame rate drops automatically when a capture takes longer than `mainThreadBudget`. Expect 1–2 fps on the simulator.
-- The system keyboard isn't shown to the agent, and Liquid Glass and other blur materials may render without their background.
+- Still frames are drawn on the main thread with `drawHierarchy`. Frame rate drops automatically when a capture takes longer than `mainThreadBudget`. Expect 1–2 fps on the simulator. Video avoids this.
+- With video, masks are applied to the recording after capture rather than while drawing. Keep JPEG for screens where that difference matters to you.
+- The drawn keyboard is a fixed US layout without Shift; the agent can type anything else from their own keyboard. Liquid Glass and other blur materials may render without their background.
 - One agent per session. If the connection drops, the session ends and the user starts a new one.
 
 ## Security

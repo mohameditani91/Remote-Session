@@ -12,6 +12,8 @@ final class Session {
 
     var onStateChange: ((SessionState) -> Void)?
     var perform: ((RemoteInput) -> InputResult)?
+    var onInput: ((RemoteInput, InputResult) -> Void)?
+    var onKeyframeRequest: (() -> Void)?
 
     private(set) var state: SessionState = .connecting {
         didSet { if state != oldValue { onStateChange?(state) } }
@@ -46,11 +48,15 @@ final class Session {
         case (.agentLeft, .awaitingConsent(let code, _)), (.agentLeft, .active(let code, _, _)):
             state = .waitingForAgent(code: code)
         case (.input(let id, let input), .active(_, _, .control)):
-            send(.result(id: id, perform?(input) ?? .nothing("notAvailable")))
-        case (.input(let id, _), .active(_, _, .view)):
-            send(.result(id: id, .blocked("viewOnly")))
-        case (.input(let id, _), _):
-            send(.result(id: id, .blocked("noConsent")))
+            handled(id, input, perform?(input) ?? .nothing("notAvailable"))
+        case (.input(let id, let input), .active(_, _, .view)):
+            handled(id, input, .blocked("viewOnly"))
+        case (.input(let id, let input), _):
+            handled(id, input, .blocked("noConsent"))
+        case (.requestKeyframe, .active):
+            onKeyframeRequest?()
+        case (.unsupportedInput(let id), _):
+            send(.result(id: id, .nothing("unsupported")))
         case (.end(let reason), _):
             finish(reason, notify: false)
         default:
@@ -81,12 +87,21 @@ final class Session {
         finish(.userEnded, notify: true)
     }
 
+    func sendApproval(action: String, allowed: Bool?) {
+        send(.approval(action: action, allowed: allowed))
+    }
+
     func sendScreen(width: Double, height: Double) {
         send(.screen(width: width, height: height))
     }
 
     func sendFrame(_ jpeg: Data, completion: @escaping () -> Void) {
         transport.send(data: jpeg, completion: completion)
+    }
+
+    private func handled(_ id: String, _ input: RemoteInput, _ result: InputResult) {
+        send(.result(id: id, result))
+        onInput?(input, result)
     }
 
     private func send(_ message: OutgoingMessage) {

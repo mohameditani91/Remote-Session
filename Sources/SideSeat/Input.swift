@@ -7,10 +7,32 @@ public protocol SideSeatTappable: AnyObject {
     func sideSeatTap(at point: CGPoint) -> Bool
 }
 
+/// Adopt on rows with swipe actions, for example SwipeCellKit cells. A sideways agent scroll over the row calls it.
+public protocol SideSeatSwipeable: AnyObject {
+    /// `delta` is the scroll in points: positive `dx` scrolls right, like a finger swiping left. Return false when there is nothing to reveal.
+    func sideSeatSwipe(by delta: CGVector) -> Bool
+}
+
 public extension View {
     /// Lets the agent trigger `action` by tapping this view. Use it on SwiftUI views driven by gestures.
     func sideSeatTarget(_ action: @escaping () -> Void) -> some View {
         background(TargetMarker(action: action))
+    }
+
+    /// `onTapGesture` that the agent can also trigger.
+    func sideSeatTapGesture(perform action: @escaping () -> Void) -> some View {
+        onTapGesture(perform: action).sideSeatTarget(action)
+    }
+
+    /// Lets the agent press the buttons inside this view. Keeps any enclosing button style.
+    func sideSeatButton() -> some View {
+        buttonStyle(TargetButtonStyle())
+    }
+}
+
+private struct TargetButtonStyle: PrimitiveButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        Button(configuration).sideSeatTarget(configuration.trigger)
     }
 }
 
@@ -24,7 +46,60 @@ private struct TargetMarker: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: TargetView, context: Context) {
-        uiView.action = action
+        uiView.action = context.environment.isEnabled ? action : nil
+    }
+}
+
+/// A single-tap recognizer the agent can trigger. Use it in place of `UITapGestureRecognizer`.
+open class SideSeatTapGestureRecognizer: UITapGestureRecognizer {
+
+    private struct Entry {
+        weak var target: AnyObject?
+        let action: Selector
+    }
+
+    private var entries: [Entry] = []
+    private var remoteLocation: CGPoint?
+    private var remoteState: UIGestureRecognizer.State?
+
+    public override init(target: Any?, action: Selector?) {
+        super.init(target: target, action: action)
+        if let target, let action { entries.append(Entry(target: target as AnyObject, action: action)) }
+    }
+
+    open override func addTarget(_ target: Any, action: Selector) {
+        super.addTarget(target, action: action)
+        entries.append(Entry(target: target as AnyObject, action: action))
+    }
+
+    open override func removeTarget(_ target: Any?, action: Selector?) {
+        super.removeTarget(target, action: action)
+        entries.removeAll { entry in
+            (target == nil || entry.target === target as AnyObject) && (action == nil || entry.action == action)
+        }
+    }
+
+    open override var state: UIGestureRecognizer.State {
+        get { remoteState ?? super.state }
+        set { super.state = newValue }
+    }
+
+    open override func location(in view: UIView?) -> CGPoint {
+        guard let remoteLocation, let window = self.view?.window else { return super.location(in: view) }
+        return view.map { $0.convert(remoteLocation, from: window) } ?? remoteLocation
+    }
+
+    func remoteTap(atWindowPoint point: CGPoint) -> Bool {
+        let live = entries.filter { $0.target != nil }
+        guard isEnabled, numberOfTapsRequired == 1, view != nil, !live.isEmpty else { return false }
+        remoteLocation = point
+        remoteState = .ended
+        defer {
+            remoteLocation = nil
+            remoteState = nil
+        }
+        for entry in live { _ = entry.target?.perform(entry.action, with: self) }
+        return true
     }
 }
 
@@ -37,11 +112,15 @@ final class InputDispatcher {
     private let windows: () -> [UIWindow]
     private let bounds: () -> CGRect
     private let firstResponder: () -> UIResponder?
+    private let keyboard: () -> CGRect?
+    private let maskRule: ((UIView) -> Bool)?
 
-    init(windows: @escaping () -> [UIWindow], bounds: @escaping () -> CGRect, firstResponder: @escaping () -> UIResponder? = UIResponder.sideSeatFirstResponder) {
+    init(windows: @escaping () -> [UIWindow], bounds: @escaping () -> CGRect, firstResponder: @escaping () -> UIResponder? = UIResponder.sideSeatFirstResponder, keyboard: @escaping () -> CGRect? = { nil }, maskRule: ((UIView) -> Bool)? = nil) {
         self.windows = windows
         self.bounds = bounds
         self.firstResponder = firstResponder
+        self.keyboard = keyboard
+        self.maskRule = maskRule
     }
 
     func perform(_ input: RemoteInput) -> InputResult {
@@ -52,13 +131,78 @@ final class InputDispatcher {
             let size = bounds().size
             return scroll(at: point(x, y), by: CGVector(dx: dx * size.width, dy: dy * size.height))
         case .text(let text):
-            guard let input = firstResponder() as? UIKeyInput else { return .nothing("noFocusedField") }
-            input.insertText(text)
-            return .performed
+            return insert(text)
         case .key(let key):
             return press(key)
         case .back:
             return goBack()
+        case .hideKeyboard:
+            guard let responder = firstResponder(), responder.isFirstResponder else { return .nothing("noKeyboard") }
+            return responder.resignFirstResponder() ? .performed : .nothing("keyboardStays")
+        }
+    }
+
+    /// Names what an input reached, for the audit log. Never reads typed text, row text, labels or masked areas.
+    func describe(_ input: RemoteInput) -> String? {
+        switch input {
+        case .tap(let x, let y):
+            let point = point(x, y)
+            if keyboard()?.contains(point) == true { return "keyboard" }
+            guard let hit = hit(at: point) else { return nil }
+            if MaskCollector.rects(in: hit.window, rule: maskRule).contains(where: { $0.contains(hit.point) }) { return "hidden area" }
+            return sequence(first: hit.view, next: \.superview).lazy.compactMap(Self.describe).first
+        case .text, .key:
+            return (firstResponder() as? UIView).flatMap(Self.describe)
+        case .scroll, .back, .hideKeyboard:
+            return nil
+        }
+    }
+
+    static func describe(_ view: UIView) -> String? {
+        let named = { (text: String?) -> String? in
+            guard let text = text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else { return nil }
+            return text.count > 40 ? String(text.prefix(40)) + "…" : text
+        }
+        switch view {
+        case let field as UITextField:
+            return named(field.placeholder ?? field.accessibilityLabel ?? field.accessibilityIdentifier).map { "\"\($0)\" field" } ?? "text field"
+        case let textView as UITextView:
+            return named(textView.accessibilityLabel ?? textView.accessibilityIdentifier).map { "\"\($0)\" text box" } ?? "text box"
+        case let button as UIButton:
+            return named(button.accessibilityLabel ?? button.title(for: .normal) ?? button.configuration?.title ?? button.accessibilityIdentifier).map { "\"\($0)\" button" } ?? "button"
+        case let toggle as UISwitch:
+            return named(toggle.accessibilityLabel ?? toggle.accessibilityIdentifier).map { "\"\($0)\" switch" } ?? "switch"
+        case let segmented as UISegmentedControl:
+            return named(segmented.accessibilityLabel ?? segmented.accessibilityIdentifier).map { "\"\($0)\" tabs" } ?? "tabs"
+        case let cell as UITableViewCell:
+            return cell.ancestor(UITableView.self)?.indexPath(for: cell).map { "row \($0.row + 1)" } ?? "row"
+        case let cell as UICollectionViewCell:
+            let labels = cell.contentView.subviews.compactMap { $0 as? UILabel }.filter { !$0.isHidden }
+            if labels.count == 1, let key = labels[0].text, (1...2).contains(key.count) { return "key \"\(key)\"" }
+            return cell.ancestor(UICollectionView.self)?.indexPath(for: cell).map { "item \($0.item + 1)" } ?? "item"
+        case let control as UIControl:
+            return named(control.accessibilityLabel ?? control.accessibilityIdentifier)
+        default:
+            guard view.isAccessibilityElement, !(view is UILabel) else { return nil }
+            return named(view.accessibilityLabel ?? view.accessibilityIdentifier)
+        }
+    }
+
+    /// The type name of the view controller the user is looking at.
+    func screenName() -> String? {
+        guard var controller = WindowSelection.forInput(windows()).first?.rootViewController else { return nil }
+        while true {
+            if let presented = controller.presentedViewController, !presented.isBeingDismissed {
+                controller = presented
+            } else if let navigation = controller as? UINavigationController, let visible = navigation.visibleViewController, visible !== controller {
+                controller = visible
+            } else if let tabs = controller as? UITabBarController, let selected = tabs.selectedViewController {
+                controller = selected
+            } else if let child = controller.children.last {
+                controller = child
+            } else {
+                return String(describing: type(of: controller))
+            }
         }
     }
 
@@ -77,14 +221,17 @@ final class InputDispatcher {
     }
 
     private func tap(at point: CGPoint) -> InputResult {
+        if let board = keyboard(), board.contains(point) { return typeKey(at: CGPoint(x: point.x - board.minX, y: point.y - board.minY), on: board.size) }
         guard let hit = hit(at: point) else { return .nothing("noTarget") }
         if let result = closePopover(tappedOn: hit.view, in: hit.window) { return result }
         if let target = Self.target(near: hit.view, at: hit.point, in: hit.window) {
             target.action?()
             return .performed
         }
+        if #available(iOS 17.0, *), let result = tapBarItem(hit: hit) { return result }
         var view: UIView? = hit.view
         while let current = view, current !== hit.window {
+            if current.gestureRecognizers?.contains(where: { ($0 as? SideSeatTapGestureRecognizer)?.remoteTap(atWindowPoint: hit.point) == true }) == true { return .performed }
             if let result = activate(current, at: hit.window.convert(hit.point, to: current)) { return result }
             view = current.superview
         }
@@ -92,9 +239,73 @@ final class InputDispatcher {
         return accessibilityActivation(from: hit.view) ?? .nothing("noTarget")
     }
 
+    @available(iOS 17.0, *)
+    private func tapBarItem(hit: (window: UIWindow, view: UIView, point: CGPoint)) -> InputResult? {
+        let chain = Array(sequence(first: hit.view, next: \.superview))
+        let bar = chain.lazy.compactMap({ $0 as? UINavigationBar }).first
+        if let bar, chain.contains(where: { $0.subviews.contains { String(describing: type(of: $0)).contains("BackButton") } }) {
+            return popBack(bar)
+        }
+        guard bar != nil || chain.contains(where: { $0 is UIToolbar || String(describing: type(of: $0)).contains("BarButton") }) else { return nil }
+        guard let item = Self.barButtonItems(in: hit.window).first(where: { $0.customView == nil && $0.frame(in: hit.window)?.contains(hit.point) == true }) else {
+            return chain.contains { String(describing: type(of: $0)) == "_UIButtonBarButton" } ? .nothing("barItemNotFound") : nil
+        }
+        guard item.isEnabled else { return .nothing("disabled") }
+        if let action = item.primaryAction {
+            (chain.lazy.compactMap { $0 as? UIControl }.first ?? UIButton()).sendAction(action)
+            return .performed
+        }
+        if let selector = item.action, UIApplication.shared.sendAction(selector, to: item.target, from: item, for: nil) {
+            return .performed
+        }
+        return .nothing(item.menu == nil ? "noTarget" : "menu")
+    }
+
+    private static func barButtonItems(in window: UIWindow) -> [UIBarButtonItem] {
+        var all: [UIBarButtonItem] = []
+
+        func visit(_ controller: UIViewController) {
+            if let navigation = controller as? UINavigationController {
+                all += navigationItems(navigation.navigationBar.topItem) + (navigation.topViewController?.toolbarItems ?? [])
+            }
+            controller.children.forEach(visit)
+            if let presented = controller.presentedViewController { visit(presented) }
+        }
+
+        func bars(_ view: UIView) {
+            if let toolbar = view as? UIToolbar { all += toolbar.items ?? [] }
+            if let bar = view as? UINavigationBar { all += navigationItems(bar.topItem) }
+            view.subviews.forEach(bars)
+        }
+
+        window.rootViewController.map(visit)
+        bars(window)
+        var seen = Set<ObjectIdentifier>()
+        return all.filter { seen.insert(ObjectIdentifier($0)).inserted }
+    }
+
+    private static func navigationItems(_ item: UINavigationItem?) -> [UIBarButtonItem] {
+        guard let item else { return [] }
+        var all = (item.leftBarButtonItems ?? []) + (item.rightBarButtonItems ?? [])
+        if #available(iOS 16.0, *) {
+            all += (item.leadingItemGroups + item.trailingItemGroups + item.centerItemGroups).flatMap(\.barButtonItems)
+        }
+        return all
+    }
+
+    private func popBack(_ bar: UINavigationBar) -> InputResult {
+        guard let navigation = bar.delegate as? UINavigationController, navigation.viewControllers.count > 1 else { return .nothing("nothingToGoBack") }
+        guard navigation.topViewController?.navigationItem.hidesBackButton != true else { return .nothing("backHidden") }
+        navigation.popViewController(animated: true)
+        return .performed
+    }
+
     private func activate(_ view: UIView, at point: CGPoint) -> InputResult? {
         if let tappable = view as? SideSeatTappable {
             return tappable.sideSeatTap(at: point) ? .performed : nil
+        }
+        if let control = view as? UIControl, !(control is UITextField), control.isManagedBySwiftUI {
+            return .nothing("swiftUIControl")
         }
         switch view {
         case let toggle as UISwitch:
@@ -129,9 +340,10 @@ final class InputDispatcher {
     }
 
     private func fire(_ control: UIControl) -> InputResult? {
-        let events = control.allControlEvents.intersection([.touchUpInside, .primaryActionTriggered])
+        let events = control.allControlEvents.intersection([.touchDown, .touchUpInside, .primaryActionTriggered])
         guard !events.isEmpty else { return nil }
         guard control.isEnabled else { return .nothing("disabled") }
+        if events.contains(.touchDown) { control.sendActions(for: .touchDown) }
         if events.contains(.touchUpInside) { control.sendActions(for: .touchUpInside) }
         if events.contains(.primaryActionTriggered) { control.sendActions(for: .primaryActionTriggered) }
         return .performed
@@ -163,6 +375,7 @@ final class InputDispatcher {
     private func select(_ cell: UITableViewCell) -> InputResult? {
         guard let table = cell.ancestor(UITableView.self), let indexPath = table.indexPath(for: cell) else { return nil }
         guard table.isEditing ? table.allowsSelectionDuringEditing : table.allowsSelection else { return .nothing("selectionDisabled") }
+        guard table.delegate?.responds(to: #selector(UITableViewDelegate.tableView(_:didSelectRowAt:))) == true else { return nil }
         let delegate = table.delegate
         if delegate?.tableView?(table, shouldHighlightRowAt: indexPath) == false { return .nothing("notSelectable") }
 
@@ -197,6 +410,7 @@ final class InputDispatcher {
     private func select(_ cell: UICollectionViewCell) -> InputResult? {
         guard let collection = cell.ancestor(UICollectionView.self), let indexPath = collection.indexPath(for: cell) else { return nil }
         guard collection.isEditing ? collection.allowsSelectionDuringEditing : collection.allowsSelection else { return .nothing("selectionDisabled") }
+        guard collection.delegate?.responds(to: #selector(UICollectionViewDelegate.collectionView(_:didSelectItemAt:))) == true else { return nil }
         let delegate = collection.delegate
         if delegate?.collectionView?(collection, shouldHighlightItemAt: indexPath) == false { return .nothing("notSelectable") }
 
@@ -238,13 +452,27 @@ final class InputDispatcher {
     }
 
     static func target(near view: UIView, at point: CGPoint, in window: UIWindow) -> TargetView? {
+        let isOnUIKitControl = sequence(first: view, next: \.superview).contains { ($0 as? UIControl)?.isManagedBySwiftUI == false }
         var container: UIView? = view
         while let current = container, current !== window {
             if let target = smallestTarget(in: current, at: point, window: window) { return target }
+            if !isOnUIKitControl, current.isSwiftUIListCell, let only = onlyTarget(in: current) { return only }
             if current.next is UIViewController { return nil }
             container = current.superview
         }
         return nil
+    }
+
+    /// A SwiftUI list row with one marked target fires it from anywhere in the row, like a real tap would.
+    private static func onlyTarget(in root: UIView) -> TargetView? {
+        var found: [TargetView] = []
+        func visit(_ view: UIView) {
+            guard !view.isHidden, view.alpha > 0.01, found.count < 2 else { return }
+            if let target = view as? TargetView, target.action != nil { found.append(target) }
+            view.subviews.forEach(visit)
+        }
+        visit(root)
+        return found.count == 1 ? found[0] : nil
     }
 
     private static func smallestTarget(in root: UIView, at point: CGPoint, window: UIWindow) -> TargetView? {
@@ -291,10 +519,23 @@ final class InputDispatcher {
     private func scroll(at point: CGPoint, by delta: CGVector) -> InputResult {
         guard let hit = hit(at: point) else { return .nothing("noScrollView") }
         let vertical = abs(delta.dy) >= abs(delta.dx)
-        let ancestors = sequence(first: hit.view, next: \.superview).compactMap { $0 as? UIScrollView }.filter(\.isScrollEnabled)
-        let candidates = Self.scrollViews(at: hit.point, under: hit.view, in: hit.window) + ancestors
-        guard let target = candidates.first(where: { $0.canScroll(vertically: vertical) }) ?? candidates.first else { return .nothing("noScrollView") }
-        return move(target, by: delta)
+        let chain = Array(sequence(first: hit.view, next: \.superview))
+        let below = Self.scrollViews(at: hit.point, under: hit.view, in: hit.window)
+        let ancestors = chain.compactMap { $0 as? UIScrollView }.filter(\.isScrollEnabled)
+        var declinedSwipe = false
+        if !vertical, let index = chain.firstIndex(where: { $0 is SideSeatSwipeable }), let swipeable = chain[index] as? SideSeatSwipeable {
+            let inside = below + chain[..<index].compactMap { $0 as? UIScrollView }.filter(\.isScrollEnabled)
+            if !inside.contains(where: { $0.canScroll(vertically: false) }) {
+                if swipeable.sideSeatSwipe(by: delta) { return .performed }
+                declinedSwipe = true
+            }
+        }
+        let candidates = below + ancestors
+        guard let target = candidates.first(where: { $0.canScroll(vertically: vertical) }) ?? candidates.first else {
+            return .nothing(declinedSwipe ? "noSwipeActions" : "noScrollView")
+        }
+        let result = move(target, by: delta)
+        return declinedSwipe && result.outcome != .performed ? .nothing("noSwipeActions") : result
     }
 
     private static func scrollViews(at point: CGPoint, under view: UIView, in window: UIWindow) -> [UIScrollView] {
@@ -319,6 +560,23 @@ final class InputDispatcher {
         guard abs(target.x - offset.x) > 0.5 || abs(target.y - offset.y) > 0.5 else { return .nothing("atEdge") }
         scrollView.setContentOffset(target, animated: false)
         return .performed
+    }
+
+    private func insert(_ text: String) -> InputResult {
+        guard let input = firstResponder() as? UIKeyInput else { return .nothing("noFocusedField") }
+        input.insertText(text)
+        return .performed
+    }
+
+    private func typeKey(at point: CGPoint, on size: CGSize) -> InputResult {
+        guard !KeyboardPlaceholder.isSensitive(firstResponder(), rule: maskRule) else { return .nothing("keyboard") }
+        switch KeyboardPlaceholder.key(at: point, size: size) {
+        case .character(let character)?: return insert(character)
+        case .space?: return insert(" ")
+        case .delete?: return press(.backspace)
+        case .enter?: return press(.return)
+        case nil: return .nothing("keyboard")
+        }
     }
 
     private func press(_ key: RemoteKey) -> InputResult {
@@ -371,6 +629,19 @@ final class InputDispatcher {
 private extension UIView {
     func ancestor<T: UIView>(_ type: T.Type) -> T? {
         sequence(first: superview, next: { $0?.superview }).lazy.compactMap { $0 as? T }.first
+    }
+
+    var isSwiftUIListCell: Bool {
+        (self is UICollectionViewCell || self is UITableViewCell) && String(reflecting: type(of: self)).hasPrefix("SwiftUI.")
+    }
+}
+
+private extension UIControl {
+    /// Controls whose only targets are SwiftUI's own report `swiftUIControl` instead of being fired; mark them with `.sideSeatTarget`.
+    var isManagedBySwiftUI: Bool {
+        // Read through KVC: bridging `allTargets` to Swift crashes on targets that aren't NSObjects.
+        guard let targets = value(forKey: "allTargets") as? NSSet, targets.count > 0 else { return false }
+        return targets.allSatisfy { String(reflecting: type(of: $0)).hasPrefix("SwiftUI.") }
     }
 }
 

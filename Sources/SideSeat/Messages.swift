@@ -3,10 +3,13 @@ import Foundation
 public struct Agent: Equatable {
     public let id: String
     public let name: String
+    /// Video codecs the agent's browser can decode, such as `h264`.
+    public let video: [String]
 
-    public init(id: String, name: String) {
+    public init(id: String, name: String, video: [String] = []) {
         self.id = id
         self.name = name
+        self.video = video
     }
 }
 
@@ -32,6 +35,17 @@ public enum RemoteInput: Equatable {
     case text(String)
     case key(RemoteKey)
     case back
+    case hideKeyboard
+}
+
+/// One agent input, as reported to `SideSeat.onInput`.
+public struct InputEvent: Equatable {
+    public let input: RemoteInput
+    public let result: InputResult
+    /// What the input reached, such as `"Save" button`, `"Email" field` or `row 3`. Never typed text, row text or masked content.
+    public let target: String?
+    /// The type name of the visible view controller.
+    public let screen: String?
 }
 
 public struct InputResult: Equatable {
@@ -58,7 +72,10 @@ enum IncomingMessage: Equatable {
     case session(code: String)
     case agentJoined(Agent)
     case agentLeft
+    case requestKeyframe
     case input(id: String, RemoteInput)
+    /// An input this version doesn't know, from a newer console.
+    case unsupportedInput(id: String)
     case end(EndReason)
 }
 
@@ -68,6 +85,7 @@ enum OutgoingMessage: Equatable {
     case screen(width: Double, height: Double)
     case result(id: String, InputResult)
     case mode(SessionMode)
+    case approval(action: String, allowed: Bool?)
     case end(EndReason)
 }
 
@@ -76,6 +94,7 @@ private struct Envelope: Codable {
     var code: String?
     var agentId: String?
     var agentName: String?
+    var video: [String]?
     var id: String?
     var action: String?
     var x: Double?
@@ -89,6 +108,7 @@ private struct Envelope: Codable {
     var outcome: InputResult.Outcome?
     var width: Double?
     var height: Double?
+    var allowed: Bool?
 
     init(type: String) {
         self.type = type
@@ -97,6 +117,7 @@ private struct Envelope: Codable {
 
 enum MessageError: Error {
     case malformed
+    case unsupported
 }
 
 extension IncomingMessage {
@@ -109,12 +130,18 @@ extension IncomingMessage {
             self = .session(code: code)
         case "agentJoined":
             guard let id = envelope.agentId, let name = envelope.agentName else { throw MessageError.malformed }
-            self = .agentJoined(Agent(id: id, name: name))
+            self = .agentJoined(Agent(id: id, name: name, video: envelope.video ?? []))
         case "agentLeft":
             self = .agentLeft
+        case "requestKeyframe":
+            self = .requestKeyframe
         case "input":
             guard let id = envelope.id else { throw MessageError.malformed }
-            self = .input(id: id, try Self.input(from: envelope))
+            do {
+                self = .input(id: id, try Self.input(from: envelope))
+            } catch MessageError.unsupported {
+                self = .unsupportedInput(id: id)
+            }
         case "end":
             self = .end(envelope.reason.flatMap(EndReason.init(rawValue:)) ?? .agentEnded)
         default:
@@ -138,8 +165,10 @@ extension IncomingMessage {
             return .key(key)
         case "back":
             return .back
+        case "hideKeyboard":
+            return .hideKeyboard
         default:
-            throw MessageError.malformed
+            throw MessageError.unsupported
         }
     }
 }
@@ -166,6 +195,10 @@ extension OutgoingMessage {
         case .mode(let mode):
             envelope = Envelope(type: "mode")
             envelope.mode = mode
+        case .approval(let action, let allowed):
+            envelope = Envelope(type: "approval")
+            envelope.action = action
+            envelope.allowed = allowed
         case .end(let reason):
             envelope = Envelope(type: "end")
             envelope.reason = reason.rawValue

@@ -22,11 +22,40 @@ private final class GuardedRows: NSObject, UITableViewDataSource, UITableViewDel
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) { selected.append(indexPath.row) }
 }
 
+private final class UnhandledLists: NSObject, UICollectionViewDataSource, UICollectionViewDelegate, UITableViewDataSource, UITableViewDelegate {
+    func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int { 4 }
+    func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
+        collectionView.dequeueReusableCell(withReuseIdentifier: "cell", for: indexPath)
+    }
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { 3 }
+    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell { UITableViewCell() }
+}
+
 private final class TappableView: UIView, SideSeatTappable {
     var points: [CGPoint] = []
     func sideSeatTap(at point: CGPoint) -> Bool {
         points.append(point)
         return true
+    }
+}
+
+private final class SwipeableView: UIView, SideSeatSwipeable {
+    var answer = true
+    var deltas: [CGVector] = []
+    func sideSeatSwipe(by delta: CGVector) -> Bool {
+        deltas.append(delta)
+        return answer
+    }
+}
+
+private final class ResigningResponder: UIResponder {
+    var resigns = true
+    var focused = true
+    var calls = 0
+    override var isFirstResponder: Bool { focused }
+    override func resignFirstResponder() -> Bool {
+        calls += 1
+        return resigns
     }
 }
 
@@ -115,6 +144,64 @@ private final class InstantPopNavigation: UINavigationController {
         #expect(counter.count == 1)
     }
 
+    @Test func touchDownFiresBeforeTouchUpInside() {
+        let w = window()
+        var order: [String] = []
+        let button = UIButton(frame: CGRect(x: 100, y: 100, width: 200, height: 60))
+        button.addAction(UIAction { _ in order.append("up") }, for: .touchUpInside)
+        button.addAction(UIAction { _ in order.append("down") }, for: .touchDown)
+        w.addSubview(button)
+        #expect(tap(dispatcher([w]), 150, 120) == .performed)
+        #expect(order == ["down", "up"])
+    }
+
+    @Test func tapsOnTheKeyboardDoNotReachTheScreenUnderIt() {
+        let w = window()
+        let counter = Counter()
+        let button = UIButton(frame: CGRect(x: 100, y: 300, width: 200, height: 100))
+        button.addAction(counter.action, for: .touchUpInside)
+        w.addSubview(button)
+        let keyboard = CGRect(x: 0, y: 320, width: 1000, height: 180)
+        let d = InputDispatcher(windows: { [w] }, bounds: { [scene] in scene }, firstResponder: { nil }, keyboard: { keyboard })
+
+        #expect(tap(d, 200, 350) == .nothing("noFocusedField"))
+        #expect(counter.count == 0)
+        #expect(tap(d, 200, 310) == .performed)
+        #expect(counter.count == 1)
+    }
+
+    @Test func tapsOnTheDrawnKeyboardTypeIntoTheFocusedField() {
+        let w = window()
+        let field = KeyInputView()
+        let keyboard = CGRect(x: 0, y: 320, width: 1000, height: 180)
+        let d = InputDispatcher(windows: { [w] }, bounds: { [scene] in scene }, firstResponder: { field }, keyboard: { keyboard })
+        let keys = KeyboardPlaceholder.keys(in: CGRect(origin: .zero, size: keyboard.size))
+        let center = { (key: KeyboardPlaceholder.Key) -> CGPoint in
+            let rect = keys.first { $0.key == key }!.rect
+            return CGPoint(x: rect.midX + keyboard.minX, y: rect.midY + keyboard.minY)
+        }
+
+        for key in [KeyboardPlaceholder.Key.character("h"), .character("i"), .space, .character("x"), .delete] {
+            let point = center(key)
+            #expect(tap(d, point.x, point.y) == .performed)
+        }
+
+        #expect(field.typed == "hi ")
+    }
+
+    @Test func thePasswordKeyboardIsNotClickable() {
+        let w = window()
+        let password = UITextField(frame: CGRect(x: 10, y: 10, width: 200, height: 40))
+        password.isSecureTextEntry = true
+        w.addSubview(password)
+        let keyboard = CGRect(x: 0, y: 320, width: 1000, height: 180)
+        let d = InputDispatcher(windows: { [w] }, bounds: { [scene] in scene }, firstResponder: { password }, keyboard: { keyboard })
+        let rect = KeyboardPlaceholder.keys(in: CGRect(origin: .zero, size: keyboard.size)).first { $0.key == .character("a") }!.rect
+
+        #expect(tap(d, rect.midX, rect.midY + keyboard.minY) == .nothing("keyboard"))
+        #expect(password.text?.isEmpty ?? true)
+    }
+
     @Test func switchesSegmentsAndSlidersChangeValue() {
         let w = window()
         let toggle = UISwitch(frame: CGRect(x: 10, y: 10, width: 51, height: 31))
@@ -164,6 +251,30 @@ private final class InstantPopNavigation: UINavigationController {
         #expect(tap(d, 500, 250) == .nothing("notSelectable"))
         #expect(tap(d, 500, 50) == .performed)
         #expect(rows.selected == [0])
+    }
+
+    @Test func listsThatIgnoreSelectionAreNotReportedAsDone() {
+        let w = window()
+        let lists = UnhandledLists()
+        let layout = UICollectionViewFlowLayout()
+        layout.itemSize = CGSize(width: 100, height: 100)
+        let collection = UICollectionView(frame: CGRect(x: 0, y: 0, width: 500, height: 500), collectionViewLayout: layout)
+        collection.register(UICollectionViewCell.self, forCellWithReuseIdentifier: "cell")
+        collection.dataSource = lists
+        collection.delegate = lists
+        let table = UITableView(frame: CGRect(x: 500, y: 0, width: 500, height: 500))
+        table.dataSource = lists
+        table.delegate = lists
+        w.addSubview(collection)
+        w.addSubview(table)
+        collection.layoutIfNeeded()
+        table.layoutIfNeeded()
+        let d = dispatcher([w])
+
+        #expect(tap(d, 50, 50) == .nothing("noTarget"))
+        #expect(tap(d, 750, 20) == .nothing("noTarget"))
+        #expect(collection.indexPathsForSelectedItems?.isEmpty != false)
+        #expect(table.indexPathForSelectedRow == nil)
     }
 
     @Test func tappableViewsGetTheirOwnCoordinates() {
@@ -218,6 +329,63 @@ private final class InstantPopNavigation: UINavigationController {
         #expect(d.perform(.scroll(x: 0.5, y: 0.5, dx: 0, dy: -1)) == .nothing("atEdge"))
     }
 
+    @Test func sidewaysScrollSwipesTheRowUnderThePointAndUpDownStillScrolls() {
+        let w = window()
+        let list = UIScrollView(frame: scene)
+        list.contentSize = CGSize(width: 1000, height: 2000)
+        list.contentInsetAdjustmentBehavior = .never
+        let row = SwipeableView(frame: CGRect(x: 0, y: 0, width: 1000, height: 100))
+        row.addSubview(UIView(frame: CGRect(x: 0, y: 0, width: 200, height: 100)))
+        list.addSubview(row)
+        w.addSubview(list)
+        let d = dispatcher([w])
+
+        #expect(d.perform(.scroll(x: 0.1, y: 0.1, dx: 0.3, dy: 0.05)) == .performed)
+        #expect(row.deltas == [CGVector(dx: 300, dy: 25)])
+        #expect(list.contentOffset == .zero)
+
+        row.answer = false
+        #expect(d.perform(.scroll(x: 0.1, y: 0.1, dx: -0.3, dy: 0)) == .nothing("noSwipeActions"))
+
+        #expect(d.perform(.scroll(x: 0.1, y: 0.1, dx: 0, dy: 0.2)) == .performed)
+        #expect(row.deltas.count == 2)
+        #expect(list.contentOffset.y == 100)
+    }
+
+    @Test func aSidewaysScrollerInsideTheRowScrollsInsteadOfSwiping() {
+        let w = window()
+        let row = SwipeableView(frame: CGRect(x: 0, y: 0, width: 1000, height: 100))
+        let strip = UIScrollView(frame: CGRect(x: 0, y: 0, width: 500, height: 100))
+        strip.contentSize = CGSize(width: 2000, height: 100)
+        strip.addSubview(UIView(frame: CGRect(x: 0, y: 0, width: 2000, height: 100)))
+        row.addSubview(strip)
+        w.addSubview(row)
+        let d = dispatcher([w])
+
+        #expect(d.perform(.scroll(x: 0.1, y: 0.1, dx: 0.3, dy: 0)) == .performed)
+        #expect(strip.contentOffset.x == 300)
+        #expect(row.deltas.isEmpty)
+
+        #expect(d.perform(.scroll(x: 0.8, y: 0.1, dx: 0.3, dy: 0)) == .performed)
+        #expect(row.deltas.count == 1)
+    }
+
+    @Test func aDeclinedSwipeFallsBackToScrollingSideways() {
+        let w = window()
+        let pager = UIScrollView(frame: scene)
+        pager.contentSize = CGSize(width: 3000, height: 500)
+        pager.contentInsetAdjustmentBehavior = .never
+        let row = SwipeableView(frame: CGRect(x: 0, y: 0, width: 1000, height: 100))
+        row.answer = false
+        pager.addSubview(row)
+        w.addSubview(pager)
+        let d = dispatcher([w])
+
+        #expect(d.perform(.scroll(x: 0.1, y: 0.1, dx: 0.3, dy: 0)) == .performed)
+        #expect(row.deltas.count == 1)
+        #expect(pager.contentOffset.x == 300)
+    }
+
     @Test func scrollFindsScrollViewsBelowViewsThatSwallowHitTesting() {
         let w = window()
         let host = SwallowingView(frame: scene)
@@ -243,6 +411,20 @@ private final class InstantPopNavigation: UINavigationController {
         #expect(d.perform(.key(.return)) == .performed)
         #expect(field.typed == "a\n")
         #expect(dispatcher([]).perform(.text("x")) == .nothing("noFocusedField"))
+    }
+
+    @Test func hideKeyboardResignsTheFocusedField() {
+        let field = ResigningResponder()
+        var results: [InputResult] = []
+        results.append(dispatcher([], responder: field).perform(.hideKeyboard))
+        field.resigns = false
+        results.append(dispatcher([], responder: field).perform(.hideKeyboard))
+        field.focused = false
+        results.append(dispatcher([], responder: field).perform(.hideKeyboard))
+        results.append(dispatcher([]).perform(.hideKeyboard))
+
+        #expect(field.calls == 2)
+        #expect(results == [.performed, .nothing("keyboardStays"), .nothing("noKeyboard"), .nothing("noKeyboard")])
     }
 
     @Test func backPopsTheVisibleNavigationUnlessBackIsHidden() {

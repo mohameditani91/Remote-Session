@@ -66,6 +66,26 @@ final class FakeTransport: SideSeatTransport {
         #expect(transport.lastSent == #"{"id":"i1","outcome":"nothing","reason":"noTarget","type":"result"}"#)
     }
 
+    @Test func everyInputIsReportedWithItsResult() {
+        let (session, transport) = activeSession(mode: .control)
+        var reported: [InputResult] = []
+        session.perform = { _ in .performed }
+        session.onInput = { reported.append($1) }
+
+        transport.deliver(#"{"type":"input","id":"i1","action":"back"}"#)
+        session.switchToViewOnly()
+        transport.deliver(#"{"type":"input","id":"i2","action":"back"}"#)
+
+        #expect(reported == [.performed, .blocked("viewOnly")])
+    }
+
+    @Test func inputsFromANewerConsoleGetAnAnswer() {
+        let (session, transport) = activeSession(mode: .control)
+        transport.deliver(#"{"type":"input","id":"i9","action":"pinch"}"#)
+        #expect(transport.lastSent == #"{"id":"i9","outcome":"nothing","reason":"unsupported","type":"result"}"#)
+        withExtendedLifetime(session) {}
+    }
+
     @Test func viewOnlyBlocksInputs() {
         let (session, transport) = activeSession(mode: .view)
         session.perform = { _ in Issue.record("must not run"); return .performed }
@@ -146,7 +166,9 @@ final class FakeTransport: SideSeatTransport {
         #expect(try IncomingMessage(json: #"{"type":"input","id":"2","action":"key","key":"return"}"#) == .input(id: "2", .key(.return)))
         #expect(try IncomingMessage(json: #"{"type":"input","id":"3","action":"key","key":"backspace"}"#) == .input(id: "3", .key(.backspace)))
         #expect(try IncomingMessage(json: #"{"type":"input","id":"4","action":"text","text":"ab"}"#) == .input(id: "4", .text("ab")))
-        #expect(throws: MessageError.self) { try IncomingMessage(json: #"{"type":"input","id":"5","action":"swipe"}"#) }
+        #expect(try IncomingMessage(json: #"{"type":"input","id":"5","action":"hideKeyboard"}"#) == .input(id: "5", .hideKeyboard))
+        #expect(try IncomingMessage(json: #"{"type":"input","id":"6","action":"swipe"}"#) == .unsupportedInput(id: "6"))
+        #expect(throws: MessageError.self) { try IncomingMessage(json: #"{"type":"input","action":"swipe"}"#) }
     }
 
     @Test func framesRateDropsWhenCaptureIsSlowAndRecovers() {
