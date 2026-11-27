@@ -138,32 +138,58 @@ final class OverlayViewController: UIViewController {
         }
     }
 
+    /// Marks an agent tap for the user: a dot that presses in, with two ripples spreading from it.
+    /// With Reduce Motion on, a still ring and dot fade out instead.
     func showTouch(at point: CGPoint, color: UIColor) {
         loadViewIfNeeded()
-        let size: CGFloat = 56
-        let ring = UIView(frame: CGRect(x: point.x - size / 2, y: point.y - size / 2, width: size, height: size))
-        ring.isUserInteractionEnabled = false
-        ring.layer.cornerRadius = size / 2
-        ring.layer.borderWidth = 4
-        ring.layer.borderColor = color.cgColor
-        ring.backgroundColor = color.withAlphaComponent(0.15)
-        ring.layer.shadowColor = UIColor.black.cgColor
-        ring.layer.shadowOpacity = 0.5
-        ring.layer.shadowRadius = 3
-        ring.layer.shadowOffset = .zero
-        let dot = UIView(frame: CGRect(x: size / 2 - 6, y: size / 2 - 6, width: 12, height: 12))
-        dot.layer.cornerRadius = 6
-        dot.layer.borderWidth = 2
-        dot.layer.borderColor = UIColor.white.cgColor
+        let size: CGFloat = 88
+        let marker = UIView(frame: CGRect(x: point.x - size / 2, y: point.y - size / 2, width: size, height: size))
+        marker.isUserInteractionEnabled = false
+        view.insertSubview(marker, belowSubview: backdrop)
+
+        let reduceMotion = UIAccessibility.isReduceMotionEnabled
+        for delay in reduceMotion ? [0] : [0, 0.2] {
+            let ripple = UIView(frame: marker.bounds)
+            ripple.layer.cornerRadius = size / 2
+            ripple.layer.borderWidth = 3
+            ripple.layer.borderColor = color.cgColor
+            ripple.backgroundColor = color.withAlphaComponent(0.18)
+            marker.addSubview(ripple)
+            guard !reduceMotion else {
+                ripple.transform = CGAffineTransform(scaleX: 0.6, y: 0.6)
+                continue
+            }
+            ripple.transform = CGAffineTransform(scaleX: 0.25, y: 0.25)
+            ripple.alpha = 0
+            UIView.animate(withDuration: 0.05, delay: delay) { ripple.alpha = 1 }
+            UIView.animate(withDuration: 0.75, delay: delay, options: .curveEaseOut) {
+                ripple.transform = .identity
+            }
+            UIView.animate(withDuration: 0.55, delay: delay + 0.2, options: .curveEaseIn) {
+                ripple.alpha = 0
+            }
+        }
+
+        let dotSize: CGFloat = 26
+        let dot = UIView(frame: CGRect(x: (size - dotSize) / 2, y: (size - dotSize) / 2, width: dotSize, height: dotSize))
         dot.backgroundColor = color
-        ring.addSubview(dot)
-        view.insertSubview(ring, belowSubview: backdrop)
-        ring.transform = CGAffineTransform(scaleX: 0.5, y: 0.5)
-        UIView.animate(withDuration: 0.2, delay: 0, options: .curveEaseOut) { ring.transform = .identity }
-        UIView.animate(withDuration: 0.4, delay: 1.2, options: .curveEaseIn) {
-            ring.alpha = 0
+        dot.layer.cornerRadius = dotSize / 2
+        dot.layer.borderWidth = 3
+        dot.layer.borderColor = UIColor.white.cgColor
+        dot.layer.shadowColor = UIColor.black.cgColor
+        dot.layer.shadowOpacity = 0.45
+        dot.layer.shadowRadius = 4
+        dot.layer.shadowOffset = .zero
+        marker.addSubview(dot)
+        if !reduceMotion {
+            dot.transform = CGAffineTransform(scaleX: 1.5, y: 1.5)
+            UIView.animate(withDuration: 0.25, delay: 0, usingSpringWithDamping: 0.55, initialSpringVelocity: 0) { dot.transform = .identity }
+        }
+
+        UIView.animate(withDuration: 0.35, delay: 1.1, options: .curveEaseIn) {
+            marker.alpha = 0
         } completion: { _ in
-            ring.removeFromSuperview()
+            marker.removeFromSuperview()
         }
     }
 

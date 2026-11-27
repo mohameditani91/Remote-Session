@@ -23,7 +23,7 @@ A support agent opens a web page, types the 6-digit code shown in your app, and 
 ## Features
 
 - **App Store safe.** Public APIs only. No touch synthesis, no private selectors. Agent input is replayed the way UIKit itself would handle it: control actions, table and collection selection through their delegates, popovers closing through their delegates, scroll offsets, text input.
-- **Consent first.** Nothing streams until the user allows viewing, or viewing and control. The user can drop to view-only or end the session at any time from a banner they can drag out of the way, and a ring shows each tap the agent makes.
+- **Consent first.** Nothing streams until the user allows viewing, or viewing and control. The user can drop to view-only or end the session at any time from a banner they can drag out of the way, and an animated marker shows each tap the agent makes.
 - **Ask before it matters.** One call asks the user to allow an action the agent started, like deleting or paying, and lets it straight through when the user started it.
 - **Masking.** Secure text fields are always covered with a blurred placeholder. Mark anything else with one property, or mask whole screens with a rule.
 - **Video or stills.** Opt in to H.264 video from ReplayKit at up to 30 fps when the agent's browser can decode it, with JPEG stills otherwise.
@@ -170,7 +170,7 @@ Secure text fields, including SwiftUI `SecureField`, are always masked. Masks ar
 | `video` | Stream H.264 video when the agent's browser can decode it |
 | `framesPerSecond`, `scale`, `jpegQuality`, `mainThreadBudget` | Trade picture quality for bandwidth and main-thread time |
 | `strings`, `tint` | Localize and theme the built-in UI |
-| `tapIndicatorColor` | Change or hide (`nil`) the ring shown at each agent tap |
+| `tapIndicatorColor` | Change or hide (`nil`) the marker shown at each agent tap |
 
 ## Protocol
 

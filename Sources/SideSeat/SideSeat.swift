@@ -26,7 +26,7 @@ public final class SideSeat {
         public var consentHandler: ((Agent, @escaping (SessionMode?) -> Void) -> Void)?
         public var strings = SideSeatStrings()
         public var tint: UIColor = .systemBlue
-        /// Rings each agent tap on the user's screen so they can follow along. Set nil to hide it.
+        /// Marks each agent tap on the user's screen with a dot and ripples, so they can follow along. Set nil to hide it.
         public var tapIndicatorColor: UIColor? = UIColor(red: 1, green: 0.42, blue: 0, alpha: 1)
 
         public init(request: URLRequest) {
