@@ -4,6 +4,7 @@ import SideSeat
 final class SupportViewController: UIViewController {
 
     private let relayField = UITextField()
+    private let videoSwitch = UISwitch()
     private let status = UILabel()
     private let button = UIButton(configuration: .filled())
 
@@ -24,14 +25,29 @@ final class SupportViewController: UIViewController {
         relayField.keyboardType = .URL
         relayField.addAction(UIAction { [weak self] _ in Support.relay = self?.relayField.text ?? "" }, for: .editingChanged)
 
+        let videoLabel = UILabel()
+        videoLabel.text = "Video"
+        videoSwitch.isOn = Support.video
+        videoSwitch.accessibilityLabel = "Video"
+        videoSwitch.addAction(UIAction { [weak self] _ in Support.video = self?.videoSwitch.isOn ?? true }, for: .valueChanged)
+        let videoRow = UIStackView(arrangedSubviews: [videoLabel, videoSwitch])
+        videoRow.distribution = .equalSpacing
+
+        let videoNote = UILabel()
+        videoNote.text = "On: H.264 video when the agent's browser can decode it. Off: JPEG stills. Applies to the next session."
+        videoNote.font = .preferredFont(forTextStyle: .footnote)
+        videoNote.textColor = .secondaryLabel
+        videoNote.numberOfLines = 0
+
         status.textColor = .secondaryLabel
         status.numberOfLines = 0
 
         button.addAction(UIAction { [weak self] _ in self?.toggle() }, for: .touchUpInside)
 
-        let stack = UIStackView(arrangedSubviews: [intro, relayField, button, status])
+        let stack = UIStackView(arrangedSubviews: [intro, relayField, videoRow, videoNote, button, status])
         stack.axis = .vertical
         stack.spacing = 16
+        stack.setCustomSpacing(6, after: videoRow)
         stack.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(stack)
         NSLayoutConstraint.activate([
@@ -56,6 +72,7 @@ final class SupportViewController: UIViewController {
     private func refresh(_ state: SessionState?) {
         button.configuration?.title = SideSeat.shared.isRunning ? "End support session" : "Start support session"
         relayField.isEnabled = !SideSeat.shared.isRunning
+        videoSwitch.isEnabled = !SideSeat.shared.isRunning
         switch state {
         case .waitingForAgent(let code)?: status.text = "Code \(code). Waiting for an agent."
         case .awaitingConsent(_, let agent)?: status.text = "\(agent.name) is asking to join."

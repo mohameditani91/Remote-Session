@@ -10,11 +10,17 @@ enum Support {
         set { UserDefaults.standard.set(newValue, forKey: "SideSeatRelay") }
     }
 
+    /// On: H.264 video when the agent's browser can decode it. Off: JPEG stills.
+    static var video: Bool {
+        get { UserDefaults.standard.object(forKey: "SideSeatVideo") as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: "SideSeatVideo") }
+    }
+
     static func start(in scene: UIWindowScene) {
         guard let url = URL(string: relay) else { return }
         var configuration = SideSeat.Configuration(relay: url)
         configuration.tint = .systemIndigo
-        configuration.video = true  // H.264 when the agent's browser can decode it, JPEG otherwise
+        configuration.video = video
         configuration.maskRule = MaskRules.screens([RecoveryKeyViewController.self])
         if let mode = UserDefaults.standard.string(forKey: "SideSeatAutoConsent").flatMap(SessionMode.init(rawValue:)) {
             configuration.consentHandler = { _, decide in decide(mode) }
