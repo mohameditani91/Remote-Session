@@ -9,7 +9,7 @@ public protocol SideSeatTappable: AnyObject {
 
 /// Adopt on rows with swipe actions, for example SwipeCellKit cells. A sideways agent scroll over the row calls it.
 public protocol SideSeatSwipeable: AnyObject {
-    /// `delta` is in points; positive `dx` is a swipe to the right. Return false when there is nothing to reveal.
+    /// `delta` is the scroll in points: positive `dx` scrolls right, like a finger swiping left. Return false when there is nothing to reveal.
     func sideSeatSwipe(by delta: CGVector) -> Bool
 }
 

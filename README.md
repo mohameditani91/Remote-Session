@@ -23,8 +23,9 @@ A support agent opens a web page, types the 6-digit code shown in your app, and 
 ## Features
 
 - **App Store safe.** Public APIs only. No touch synthesis, no private selectors. Agent input is replayed the way UIKit itself would handle it: control actions, table and collection selection through their delegates, popovers closing through their delegates, scroll offsets, text input.
-- **Consent first.** Nothing streams until the user allows viewing, or viewing and control. The user can drop to view-only or end the session at any time from a banner they can drag out of the way.
-- **Masking.** Secure text fields are always painted black. Mark anything else with one property, or mask whole screens with a rule.
+- **Consent first.** Nothing streams until the user allows viewing, or viewing and control. The user can drop to view-only or end the session at any time from a banner they can drag out of the way, and a ring shows each tap the agent makes.
+- **Ask before it matters.** One call asks the user to allow an action the agent started, like deleting or paying, and lets it straight through when the user started it.
+- **Masking.** Secure text fields are always covered with a blurred placeholder. Mark anything else with one property, or mask whole screens with a rule.
 - **No dependencies.** About 2,000 lines of Swift. iOS 15+, UIKit and SwiftUI.
 - **Bring your own backend.** A small reference relay and agent console are included for local development. The transport is a protocol, so you can run sessions over your own infrastructure.
 
@@ -77,15 +78,21 @@ SideSeat.shared.start(in: windowScene, configuration: configuration)
 
 | Input | Handled |
 | --- | --- |
-| Tap | Buttons and other controls, switches, segmented controls, sliders, text fields, table and collection cells (`willSelect`/`shouldSelect`/`didSelect` honored), popovers closing on an outside tap (delegate honored), accessibility-activatable views, SwiftUI views marked with `.sideSeatTarget` |
-| Scroll | The scroll view under the pointer that can move in that direction, clamped to its content |
+| Tap | Buttons and other controls (`touchDown`, `touchUpInside` and primary actions), switches, segmented controls, sliders, text fields, table and collection cells (`willSelect`/`shouldSelect`/`didSelect` honored), navigation bar and toolbar items (iOS 17+), popovers closing on an outside tap (delegate honored), accessibility-activatable views, `SideSeatTapGestureRecognizer`, SwiftUI views marked with `.sideSeatTarget`, `.sideSeatTapGesture` or `.sideSeatButton()`, and keys on the drawn keyboard |
+| Scroll | The scroll view under the pointer that can move in that direction, clamped to its content. Sideways over a `SideSeatSwipeable` row, it opens the row's swipe actions |
 | Type | Text, Backspace and Return into the focused field (`textFieldShouldReturn` honored) |
 | Back | Pops the visible navigation stack, or dismisses a modal |
+| Hide keyboard | Resigns the focused field |
 
-Things it can't drive, by design: custom gesture recognizers, web views, games, and SwiftUI gestures without a marker. Make them reachable with:
+The system keyboard runs outside your app, so the agent sees a drawn keyboard in its place and can tap its keys. It is blurred and locked while a password or masked field has focus.
+
+Things it can't drive, by design: plain gesture recognizers, web views, games, and SwiftUI gestures without a marker. Make them reachable with:
 
 ```swift
-// UIKit: views driven by gestures
+// UIKit: views driven by taps
+let tap = SideSeatTapGestureRecognizer(target: self, action: #selector(cardTapped))  // instead of UITapGestureRecognizer
+
+// UIKit: anything else
 extension MyCardCell: SideSeatTappable {
     func sideSeatTap(at point: CGPoint) -> Bool {
         toggleExpanded()
@@ -93,11 +100,40 @@ extension MyCardCell: SideSeatTappable {
     }
 }
 
-// SwiftUI: views driven by onTapGesture
-Card()
-    .onTapGesture { likes += 1 }
-    .sideSeatTarget { likes += 1 }
+// UIKit: rows with swipe actions, for example SwipeCellKit cells
+extension MyRowCell: SideSeatSwipeable {
+    func sideSeatSwipe(by delta: CGVector) -> Bool {
+        showSwipe(orientation: delta.dx > 0 ? .right : .left)   // scrolling right is a finger swiping left
+        return true
+    }
+}
+
+// SwiftUI
+Card().sideSeatTapGesture { likes += 1 }   // instead of .onTapGesture
+Form { … }.sideSeatButton()                // makes the buttons inside pressable
 ```
+
+## Ask before sensitive actions
+
+Wrap anything the user should approve. When the agent's input led to it, the user sees an Allow / Deny card and agent input waits for the answer. When the user did it themselves, the completion runs straight away.
+
+```swift
+SideSeat.shared.confirmAgentAction("Delete \"\(task.title)\"") { allowed in
+    if allowed { store.delete(task) }
+}
+```
+
+`isAgentAction` stays true for 90 seconds after the agent's last input that did something, and ends as soon as the user touches the screen.
+
+## Audit log
+
+```swift
+SideSeat.shared.onInput = { event in
+    log("\(event.input) on \(event.target ?? "nothing") in \(event.screen ?? "?"): \(event.result.outcome)")
+}
+```
+
+`target` is a short name such as `"Save" button`, `"Email" field` or `row 3`. It comes from titles, placeholders and accessibility labels; typed text, row text, labels and masked areas are never read.
 
 ## Masking
 
@@ -107,7 +143,7 @@ Text(cardNumber).sideSeatMasked()                              // a SwiftUI view
 configuration.maskRule = MaskRules.screens([PaymentViewController.self])   // whole screens
 ```
 
-Secure text fields, including SwiftUI `SecureField`, are always masked. Masks are drawn into each frame before it leaves the device, and they follow scrolling.
+Secure text fields, including SwiftUI `SecureField`, are always masked. Masks are drawn into each frame before it leaves the device, and they follow scrolling. The agent sees blurred blank tiles there, never a blur of what is underneath.
 
 ## Extension points
 
@@ -117,10 +153,11 @@ Secure text fields, including SwiftUI `SecureField`, are always masked. Masks ar
 | `transport` | Replace the WebSocket with your own `SideSeatTransport` |
 | `inputInterceptor` | Block or handle agent input yourself, for example on payment screens |
 | `consentHandler` | Show your own consent UI instead of the built-in card |
-| `maskRule` | Decide which views to paint black |
+| `maskRule` | Decide which views to mask |
 | `allowsControl` | Offer viewing only |
 | `framesPerSecond`, `scale`, `jpegQuality`, `mainThreadBudget` | Trade picture quality for bandwidth and main-thread time |
 | `strings`, `tint` | Localize and theme the built-in UI |
+| `tapIndicatorColor` | Change or hide (`nil`) the ring shown at each agent tap |
 
 ## Protocol
 
@@ -129,8 +166,8 @@ JSON text messages plus binary JPEG frames over one WebSocket per side. The rela
 | From | Message |
 | --- | --- |
 | Relay → app | `session {code}`, `agentJoined {agentId, agentName}`, `agentLeft`, `input {id, action, …}`, `end {reason}` |
-| App → relay | `consent {mode}`, `denied`, `screen {width, height}`, `result {id, outcome, reason}`, `mode {mode}`, `end {reason}`, binary JPEG frames |
-| Agent → relay | `input {id, action: tap\|scroll\|text\|key\|back, …}`, `end` |
+| App → relay | `consent {mode}`, `denied`, `screen {width, height}`, `result {id, outcome, reason}`, `mode {mode}`, `approval {action, allowed?}`, `end {reason}`, binary JPEG frames |
+| Agent → relay | `input {id, action: tap\|scroll\|text\|key\|back\|hideKeyboard, …}`, `end` |
 
 Coordinates are normalized to 0…1 of the app's window scene.
 
@@ -141,7 +178,7 @@ The relay in `Examples/Relay` is a starting point for development. It has an opt
 ## Limitations
 
 - Each frame is drawn on the main thread with `drawHierarchy`. Frame rate drops automatically when a capture takes longer than `mainThreadBudget`. Expect 1–2 fps on the simulator.
-- The system keyboard isn't shown to the agent, and Liquid Glass and other blur materials may render without their background.
+- The drawn keyboard is a fixed US layout without Shift; the agent can type anything else from their own keyboard. Liquid Glass and other blur materials may render without their background.
 - One agent per session. If the connection drops, the session ends and the user starts a new one.
 
 ## Security
