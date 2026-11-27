@@ -13,6 +13,7 @@ final class Session {
     var onStateChange: ((SessionState) -> Void)?
     var perform: ((RemoteInput) -> InputResult)?
     var onInput: ((RemoteInput, InputResult) -> Void)?
+    var onKeyframeRequest: (() -> Void)?
 
     private(set) var state: SessionState = .connecting {
         didSet { if state != oldValue { onStateChange?(state) } }
@@ -52,6 +53,8 @@ final class Session {
             handled(id, input, .blocked("viewOnly"))
         case (.input(let id, let input), _):
             handled(id, input, .blocked("noConsent"))
+        case (.requestKeyframe, .active):
+            onKeyframeRequest?()
         case (.unsupportedInput(let id), _):
             send(.result(id: id, .nothing("unsupported")))
         case (.end(let reason), _):

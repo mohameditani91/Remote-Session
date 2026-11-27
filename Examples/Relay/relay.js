@@ -93,19 +93,21 @@ function onDevice(device) {
 function onAgent(agent, url) {
   const code = url.searchParams.get('code') || ''
   const name = (url.searchParams.get('name') || '').trim().slice(0, 40)
+  const video = (url.searchParams.get('video') || '').split(',').filter(codec => codec === 'h264')
   const room = rooms.get(code)
   if (!room || !name) return agent.close(4404, 'unknown code')
   if (room.agent) return agent.close(4409, 'an agent is already connected')
 
   room.agent = agent
   log(code, `agent "${name}" joined`)
-  send(room.device, { type: 'agentJoined', agentId: crypto.randomUUID(), agentName: name })
+  send(room.device, { type: 'agentJoined', agentId: crypto.randomUUID(), agentName: name, video })
 
   agent.on('message', (data, isBinary) => {
     if (isBinary) return
     let message
     try { message = JSON.parse(data) } catch { return }
     if (message.type === 'input') send(room.device, message)
+    if (message.type === 'requestKeyframe') send(room.device, { type: 'requestKeyframe' })
     if (message.type === 'end') {
       room.ended = true
       send(room.device, { type: 'end', reason: 'agentEnded' })

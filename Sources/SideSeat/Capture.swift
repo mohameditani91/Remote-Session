@@ -93,7 +93,7 @@ struct FrameRatePolicy: Equatable {
     }
 }
 
-final class Streamer {
+final class Streamer: FrameStreamer {
 
     /// Lets the screen settle after an agent input or a user touch, then sends it without waiting for the next tick.
     static let inputCaptureDelay: TimeInterval = 0.2
@@ -138,10 +138,7 @@ final class Streamer {
         DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
     }
 
-    func restart() {
-        lastFrame = nil
-        lastSize = nil
-    }
+    func requestKeyframe() {}
 
     private func schedule() {
         timer?.invalidate()

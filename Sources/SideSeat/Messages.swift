@@ -3,10 +3,13 @@ import Foundation
 public struct Agent: Equatable {
     public let id: String
     public let name: String
+    /// Video codecs the agent's browser can decode, such as `h264`.
+    public let video: [String]
 
-    public init(id: String, name: String) {
+    public init(id: String, name: String, video: [String] = []) {
         self.id = id
         self.name = name
+        self.video = video
     }
 }
 
@@ -69,6 +72,7 @@ enum IncomingMessage: Equatable {
     case session(code: String)
     case agentJoined(Agent)
     case agentLeft
+    case requestKeyframe
     case input(id: String, RemoteInput)
     /// An input this version doesn't know, from a newer console.
     case unsupportedInput(id: String)
@@ -90,6 +94,7 @@ private struct Envelope: Codable {
     var code: String?
     var agentId: String?
     var agentName: String?
+    var video: [String]?
     var id: String?
     var action: String?
     var x: Double?
@@ -125,9 +130,11 @@ extension IncomingMessage {
             self = .session(code: code)
         case "agentJoined":
             guard let id = envelope.agentId, let name = envelope.agentName else { throw MessageError.malformed }
-            self = .agentJoined(Agent(id: id, name: name))
+            self = .agentJoined(Agent(id: id, name: name, video: envelope.video ?? []))
         case "agentLeft":
             self = .agentLeft
+        case "requestKeyframe":
+            self = .requestKeyframe
         case "input":
             guard let id = envelope.id else { throw MessageError.malformed }
             do {

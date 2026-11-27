@@ -98,7 +98,9 @@ const reasons = {
   waitingForUser: 'Waiting for the user to answer', keyboard: 'That key is locked', swiftUIControl: "That control can't be tapped remotely",
   unsupported: "The app doesn't support that yet", barItemNotFound: 'No bar button there', noKeyboard: 'No keyboard is open', keyboardStays: 'The field kept the keyboard', menu: 'That button opens a menu', noSwipeActions: 'Nothing to swipe there'
 }
-let ws = null, mode = null, seq = 0, scroll = null, asking = null
+let ws = null, mode = null, seq = 0, scroll = null, asking = null, streamKind = null
+let video = [], decoder = null, codec = null, videoSeq = null, askedAt = 0
+window.VideoDecoder?.isConfigSupported({ codec: 'avc1.4D4028' }).then(support => { if (support.supported) video = ['h264'] }).catch(() => {})
 const pending = new Map()
 
 function setStatus(text, tone) { $('status').textContent = text; $('status').dataset.tone = tone || '' }
@@ -123,8 +125,9 @@ function setMode(next) {
 
 function connect(code, name) {
   const scheme = location.protocol === 'https:' ? 'wss' : 'ws'
-  ws = new WebSocket(`${scheme}://${location.host}/agent?code=${encodeURIComponent(code)}&name=${encodeURIComponent(name)}`)
-  ws.binaryType = 'blob'
+  const codecs = video.length ? '&video=' + video.join(',') : ''
+  ws = new WebSocket(`${scheme}://${location.host}/agent?code=${encodeURIComponent(code)}&name=${encodeURIComponent(name)}${codecs}`)
+  ws.binaryType = 'arraybuffer'
   let joined = false
   ws.onopen = () => {
     joined = true
@@ -136,11 +139,13 @@ function connect(code, name) {
     addEvent('Joined session ' + code)
   }
   ws.onmessage = async event => {
-    if (event.data instanceof Blob) {
-      const bitmap = await createImageBitmap(event.data)
-      if (canvas.width !== bitmap.width || canvas.height !== bitmap.height) { canvas.width = bitmap.width; canvas.height = bitmap.height }
-      ctx.drawImage(bitmap, 0, 0)
-      $('hint').hidden = true
+    if (event.data instanceof ArrayBuffer) {
+      const bytes = new Uint8Array(event.data)
+      if (bytes[0] === 1 && bytes[1] === 2) { noteStream('video'); return decodeVideo(event.data) }
+      noteStream('stills')
+      stopVideo()
+      const bitmap = await createImageBitmap(new Blob([event.data]))
+      draw(bitmap, bitmap.width, bitmap.height)
       return
     }
     const message = JSON.parse(event.data)
@@ -168,11 +173,77 @@ function connect(code, name) {
       return
     }
     if (event.code === 4403) addEvent('User denied the request', '', 'bad')
-    ws = null; setMode(null)
+    ws = null; setMode(null); stopVideo(); videoSeq = null; streamKind = null
     setStatus('Not connected')
     $('end').disabled = true; $('back').disabled = true; $('hide-keyboard').disabled = true; $('join-open').disabled = false
     $('hint').hidden = false; $('hint').textContent = 'Session over. Join again with a new code.'
   }
+}
+
+function draw(image, width, height) {
+  if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height }
+  ctx.drawImage(image, 0, 0)
+  image.close()
+  $('hint').hidden = true
+}
+
+function noteStream(kind) {
+  if (kind === streamKind) return
+  streamKind = kind
+  addEvent(kind === 'video' ? 'Receiving H.264 video' : 'Receiving still frames')
+}
+
+// Video frames: [1, 2, seq (4 bytes), flags] then one H.264 access unit. JPEG frames start with 0xFF.
+function decodeVideo(buffer) {
+  if (buffer.byteLength < 7) return
+  const view = new DataView(buffer)
+  const frameSeq = view.getUint32(2), key = (view.getUint8(6) & 1) === 1, data = new Uint8Array(buffer, 7)
+  const gap = videoSeq != null && frameSeq !== (videoSeq + 1) >>> 0
+  videoSeq = frameSeq
+  try {
+    if (key) {
+      const next = avcCodec(data)
+      if (next && (next !== codec || decoder?.state !== 'configured' || decoder.decodeQueueSize > 3)) startDecoder(next)
+    } else if (gap || decoder?.decodeQueueSize > 3) return loseVideo()
+    if (decoder?.state !== 'configured') return
+    decoder.decode(new EncodedVideoChunk({ type: key ? 'key' : 'delta', timestamp: Math.round(performance.now() * 1000), data }))
+  } catch {
+    loseVideo()
+  }
+}
+
+// The codec string comes from the SPS that leads every keyframe.
+function avcCodec(data) {
+  for (let i = 0; i + 6 < data.length; i++) {
+    if (data[i] !== 0 || data[i + 1] !== 0 || data[i + 2] !== 1 || (data[i + 3] & 31) !== 7) continue
+    return `avc1.${[...data.subarray(i + 4, i + 7)].map(byte => byte.toString(16).padStart(2, '0')).join('').toUpperCase()}`
+  }
+  return null
+}
+
+function startDecoder(next) {
+  stopVideo()
+  const created = new VideoDecoder({
+    output: frame => (created === decoder ? draw(frame, frame.displayWidth, frame.displayHeight) : frame.close()),
+    error: () => { if (created === decoder) loseVideo() }
+  })
+  decoder = created
+  codec = next
+  created.configure({ codec: next, optimizeForLatency: true })
+}
+
+function stopVideo() {
+  try { decoder?.close() } catch {}
+  decoder = null
+}
+
+// Skip to the next keyframe, and ask for one now (at most once a second).
+function loseVideo() {
+  stopVideo()
+  const now = performance.now()
+  if (now - askedAt < 1000 || !ws || ws.readyState !== WebSocket.OPEN) return
+  askedAt = now
+  ws.send(JSON.stringify({ type: 'requestKeyframe' }))
 }
 
 function sendInput(action, fields, label) {

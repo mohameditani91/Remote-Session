@@ -9,6 +9,10 @@ public final class SideSeat {
         /// Replaces the WebSocket transport, for example to run over your own backend.
         public var transport: SideSeatTransport?
         public var allowsControl = true
+        /// Streams H.264 video captured with ReplayKit when the agent's browser can decode it, and JPEG frames otherwise.
+        /// iOS asks the user to allow screen recording first; if they don't, or capture fails, SideSeat falls back to JPEG.
+        public var video = false
+        /// JPEG frames only. Video runs at up to 30 fps.
         public var framesPerSecond: Double = 2
         public var scale: CGFloat = 1
         public var jpegQuality: CGFloat = 0.7
@@ -59,7 +63,8 @@ public final class SideSeat {
     private var session: Session?
     private weak var controller: OverlayViewController?
     private var approval = AgentApproval()
-    private var streamer: Streamer?
+    private var streamer: FrameStreamer?
+    private var makeStreamer: ((_ video: Bool) -> FrameStreamer?)?
     private var overlay: OverlayWindow?
     private var keyboard: KeyboardFrame?
 
@@ -106,24 +111,63 @@ public final class SideSeat {
         window.rootViewController = controller
         window.isHidden = false
 
-        let streamer = Streamer(scene: scene, configuration: configuration, session: session, keyboard: keyboardRect)
-        window.onTouch = { [weak self, weak streamer] in
-            self?.approval.userInput()
-            streamer?.captureSoon(after: Streamer.userTouchCaptureDelay)
+        let jpeg = { [weak scene, weak session] () -> FrameStreamer? in
+            guard let scene, let session else { return nil }
+            return Streamer(scene: scene, configuration: configuration, session: session, keyboard: keyboardRect)
         }
-        session.onInput = { [weak self, weak controller, weak streamer] input, result in
+        let video = { [weak self, weak scene, weak session] () -> FrameStreamer? in
+            #if targetEnvironment(simulator)
+            let source: CaptureSource = SimulatorCaptureSource(scene: scene)
+            let overlays: () -> CGImage? = { nil }
+            #else
+            let source: CaptureSource = ReplayKitSource()
+            let overlays: () -> CGImage? = { scene.flatMap(VideoOverlays.image(in:)) }
+            #endif
+            let streamer = VideoStreamer(
+                source: source,
+                scale: configuration.scale,
+                sceneSize: { scene?.coordinateSpace.bounds.size },
+                masks: { scene.map { VideoMasks.rects(in: $0, rule: configuration.maskRule) } ?? [] },
+                overlays: overlays,
+                keyboard: {
+                    guard let scene, let rect = keyboardRect() else { return nil }
+                    let sensitive = KeyboardPlaceholder.isSensitive(UIResponder.sideSeatFirstResponder(), rule: configuration.maskRule)
+                    return KeyboardOverlay(rect: rect, dark: scene.traitCollection.userInterfaceStyle == .dark, blurred: sensitive)
+                },
+                isAllowed: { session?.isStreaming ?? false },
+                sendFrame: { data, done in
+                    guard let session else { return done() }
+                    session.sendFrame(data, completion: done)
+                },
+                sendSceneSize: { session?.sendScreen(width: Double($0.width), height: Double($0.height)) }
+            )
+            streamer.onFallback = { [weak self] _ in self?.startStreaming(video: false) }
+            return streamer
+        }
+        makeStreamer = { $0 ? video() : jpeg() }
+
+        window.onTouch = { [weak self] in
+            self?.approval.userInput()
+            self?.streamer?.captureSoon(after: Streamer.userTouchCaptureDelay)
+        }
+        session.onKeyframeRequest = { [weak self] in self?.streamer?.requestKeyframe() }
+        session.onInput = { [weak self, weak controller] input, result in
             if case .tap(let x, let y) = input, let color = configuration.tapIndicatorColor {
                 controller?.showTouch(at: dispatcher.point(x, y), color: color)
             }
-            if result.outcome == .performed { streamer?.captureSoon(after: Streamer.inputCaptureDelay) }
+            if result.outcome == .performed { self?.streamer?.captureSoon(after: Streamer.inputCaptureDelay) }
             let (target, screen) = described ?? describe(input)
             described = nil
             self?.onInput?(InputEvent(input: input, result: result, target: target, screen: screen))
         }
-        session.onStateChange = { [weak self, weak session, weak controller, weak streamer] state in
+        session.onStateChange = { [weak self, weak session, weak controller] state in
             if !state.isControlling { self?.answerApproval(false) }
             controller?.render(state)
-            if case .active = state { streamer?.restart() }
+            if case .active(_, let agent, _) = state {
+                if self?.streamer == nil { self?.startStreaming(video: configuration.video && agent.video.contains("h264")) }
+            } else {
+                self?.stopStreaming()
+            }
             if case .awaitingConsent(_, let agent) = state, let ask = configuration.consentHandler {
                 ask(agent) { mode in
                     DispatchQueue.main.async {
@@ -136,12 +180,10 @@ public final class SideSeat {
         }
 
         self.session = session
-        self.streamer = streamer
         self.overlay = window
         self.controller = controller
         self.keyboard = keyboard
         controller.render(.connecting)
-        streamer.start()
         session.start()
     }
 
@@ -157,13 +199,25 @@ public final class SideSeat {
         answers.forEach { $0(allowed) }
     }
 
+    /// A new streamer per agent: the next agent's browser may not decode video.
+    private func startStreaming(video: Bool) {
+        streamer?.stop()
+        streamer = makeStreamer?(video)
+        streamer?.start()
+    }
+
+    private func stopStreaming() {
+        streamer?.stop()
+        streamer = nil
+    }
+
     private func tearDown() {
         approval = AgentApproval()
-        streamer?.stop()
+        stopStreaming()
+        makeStreamer = nil
         overlay?.isHidden = true
         overlay = nil
         keyboard = nil
-        streamer = nil
         session = nil
     }
 }

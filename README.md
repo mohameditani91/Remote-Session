@@ -26,7 +26,8 @@ A support agent opens a web page, types the 6-digit code shown in your app, and 
 - **Consent first.** Nothing streams until the user allows viewing, or viewing and control. The user can drop to view-only or end the session at any time from a banner they can drag out of the way, and a ring shows each tap the agent makes.
 - **Ask before it matters.** One call asks the user to allow an action the agent started, like deleting or paying, and lets it straight through when the user started it.
 - **Masking.** Secure text fields are always covered with a blurred placeholder. Mark anything else with one property, or mask whole screens with a rule.
-- **No dependencies.** About 2,000 lines of Swift. iOS 15+, UIKit and SwiftUI.
+- **Video or stills.** Opt in to H.264 video from ReplayKit at up to 30 fps when the agent's browser can decode it, with JPEG stills otherwise.
+- **No dependencies.** About 2,800 lines of Swift. iOS 15+, UIKit and SwiftUI.
 - **Bring your own backend.** A small reference relay and agent console are included for local development. The transport is a protocol, so you can run sessions over your own infrastructure.
 
 ## See it in action
@@ -114,6 +115,16 @@ Button("Pay") { pay() }.sideSeatButton()   // keeps the button's style
 Toggle("Done", isOn: $done).sideSeatTarget { done.toggle() }
 ```
 
+## Video
+
+```swift
+configuration.video = true
+```
+
+The app then streams H.264 video captured with ReplayKit to any agent whose browser can decode it (WebCodecs, in current Chrome, Edge and Safari), and JPEG stills to the rest. iOS asks the user to allow screen recording first. If they don't, or capture fails or goes quiet, the session carries on with stills.
+
+Video costs almost no main-thread time, so the picture stays smooth while the user scrolls. Masks and the drawn keyboard are painted over each recorded frame from a snapshot taken right after it arrives, together with the previous snapshot, so a masked view that moves stays covered. On the simulator, where ReplayKit doesn't capture, frames come from window snapshots at 15 fps.
+
 ## Ask before sensitive actions
 
 Wrap anything the user should approve. When the agent's input led to it, the user sees an Allow / Deny card and agent input waits for the answer. When the user did it themselves, the completion runs straight away.
@@ -156,21 +167,24 @@ Secure text fields, including SwiftUI `SecureField`, are always masked. Masks ar
 | `consentHandler` | Show your own consent UI instead of the built-in card |
 | `maskRule` | Decide which views to mask |
 | `allowsControl` | Offer viewing only |
+| `video` | Stream H.264 video when the agent's browser can decode it |
 | `framesPerSecond`, `scale`, `jpegQuality`, `mainThreadBudget` | Trade picture quality for bandwidth and main-thread time |
 | `strings`, `tint` | Localize and theme the built-in UI |
 | `tapIndicatorColor` | Change or hide (`nil`) the ring shown at each agent tap |
 
 ## Protocol
 
-JSON text messages plus binary JPEG frames over one WebSocket per side. The relay pairs one app with one agent by code.
+JSON text messages plus binary frames over one WebSocket per side. The relay pairs one app with one agent by code.
 
 | From | Message |
 | --- | --- |
-| Relay → app | `session {code}`, `agentJoined {agentId, agentName}`, `agentLeft`, `input {id, action, …}`, `end {reason}` |
-| App → relay | `consent {mode}`, `denied`, `screen {width, height}`, `result {id, outcome, reason}`, `mode {mode}`, `approval {action, allowed?}`, `end {reason}`, binary JPEG frames |
-| Agent → relay | `input {id, action: tap\|scroll\|text\|key\|back\|hideKeyboard, …}`, `end` |
+| Relay → app | `session {code}`, `agentJoined {agentId, agentName, video}`, `agentLeft`, `input {id, action, …}`, `requestKeyframe`, `end {reason}` |
+| App → relay | `consent {mode}`, `denied`, `screen {width, height}`, `result {id, outcome, reason}`, `mode {mode}`, `approval {action, allowed?}`, `end {reason}`, binary frames |
+| Agent → relay | `input {id, action: tap\|scroll\|text\|key\|back\|hideKeyboard, …}`, `requestKeyframe`, `end` |
 
 Coordinates are normalized to 0…1 of the app's window scene.
+
+Binary frames are either a bare JPEG (first byte `0xFF`) or one H.264 access unit with a 7-byte header: version `1`, kind `2`, a big-endian `uint32` sequence number, and a flags byte whose bit 0 marks a keyframe. Payloads are Annex-B, and every keyframe carries its SPS and PPS. The app sends video only when `agentJoined.video` lists `h264`; the reference console asks for it by adding `video=h264` to its join URL when `VideoDecoder` supports H.264. After a sequence gap or a decoder error it sends `requestKeyframe`, and the app answers with a keyframe within half a second.
 
 ## Before you ship it
 
@@ -178,7 +192,8 @@ The relay in `Examples/Relay` is a starting point for development. It has an opt
 
 ## Limitations
 
-- Each frame is drawn on the main thread with `drawHierarchy`. Frame rate drops automatically when a capture takes longer than `mainThreadBudget`. Expect 1–2 fps on the simulator.
+- Still frames are drawn on the main thread with `drawHierarchy`. Frame rate drops automatically when a capture takes longer than `mainThreadBudget`. Expect 1–2 fps on the simulator. Video avoids this.
+- With video, masks are applied to the recording after capture rather than while drawing. Keep JPEG for screens where that difference matters to you.
 - The drawn keyboard is a fixed US layout without Shift; the agent can type anything else from their own keyboard. Liquid Glass and other blur materials may render without their background.
 - One agent per session. If the connection drops, the session ends and the user starts a new one.
 
