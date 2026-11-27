@@ -1,0 +1,69 @@
+name: Bug report
+description: Something doesn't work as documented.
+labels: [bug]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The smallest set of steps that shows the problem. A sample project or a change to the sample app helps most.
+      placeholder: |
+        1. Start a session with …
+        2. In the console, tap …
+        3. …
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Library version
+      description: The release tag or commit you're using.
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: input
+    id: ios
+    attributes:
+      label: iOS version and device
+      placeholder: iOS 18.1, iPhone 15 (or Simulator)
+    validations:
+      required: true
+  - type: dropdown
+    id: ui
+    attributes:
+      label: UI framework of the affected screen
+      options:
+        - UIKit
+        - SwiftUI
+        - Both
+    validations:
+      required: true
+  - type: dropdown
+    id: stream
+    attributes:
+      label: Stream mode
+      options:
+        - H.264 video
+        - JPEG stills
+        - Not sure
+  - type: dropdown
+    id: relay
+    attributes:
+      label: Relay
+      options:
+        - The reference relay in Examples/Relay
+        - My own relay
+        - My own transport
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Console output from the app or the relay, if any. Remove anything private first.
+      render: shell
