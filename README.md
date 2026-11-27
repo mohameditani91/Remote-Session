@@ -32,10 +32,10 @@ A support agent opens a web page, types the 6-digit code shown in your app, and 
 
 ## See it in action
 
-An agent opens a task, marks it done, sets the priority, types a comment and saves, all from the browser. Every input shows up in the activity log with its result.
+Over H.264 video, an agent opens a task, marks it done, sets the priority, types a comment with the drawn keyboard showing, and saves. Then they try to open the recovery key: the user is asked first, allows it on the phone, and the screen reaches the agent masked. Every input shows up in the activity log with its result.
 
 <p align="center">
-  <img src="docs/demo.gif" alt="An agent driving the sample app from the web console" width="900">
+  <img src="docs/demo.gif" alt="An agent driving the sample app from the web console over video, with an approval prompt and a masked screen" width="900">
 </p>
 
 | Pairing and consent | What the user sees vs. what the agent sees |
