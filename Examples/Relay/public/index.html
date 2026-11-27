@@ -57,6 +57,7 @@
   <h1>SideSeat</h1>
   <span id="status" class="chip">Not connected</span>
   <span class="spacer"></span>
+  <button id="hide-keyboard" disabled title="Close the keyboard on the device">Hide keyboard</button>
   <button id="back" disabled title="Go back on the device">Back</button>
   <button id="end" class="danger" disabled>End session</button>
   <button id="join-open" class="primary">Join</button>
@@ -95,7 +96,7 @@ const reasons = {
   noFocusedField: 'Tap a text field first', cannotFocus: "That field can't be edited", alertOpen: 'An alert is open',
   popoverStaysOpen: 'This popup stays open', backHidden: 'This screen has no Back', nothingToGoBack: 'Nothing to go back to',
   waitingForUser: 'Waiting for the user to answer', keyboard: 'That key is locked', swiftUIControl: "That control can't be tapped remotely",
-  barItemNotFound: 'No bar button there', menu: 'That button opens a menu', noSwipeActions: 'Nothing to swipe there'
+  barItemNotFound: 'No bar button there', noKeyboard: 'No keyboard is open', keyboardStays: 'The field kept the keyboard', menu: 'That button opens a menu', noSwipeActions: 'Nothing to swipe there'
 }
 let ws = null, mode = null, seq = 0, scroll = null
 const pending = new Map()
@@ -115,6 +116,7 @@ function setMode(next) {
   mode = next
   canvas.classList.toggle('control', mode === 'control')
   $('back').disabled = mode !== 'control'
+  $('hide-keyboard').disabled = mode !== 'control'
   if (mode === 'control') setStatus('Controlling', 'good')
   else if (mode === 'view') setStatus('Viewing', 'good')
 }
@@ -165,7 +167,7 @@ function connect(code, name) {
     if (event.code === 4403) addEvent('User denied the request', '', 'bad')
     ws = null; setMode(null)
     setStatus('Not connected')
-    $('end').disabled = true; $('back').disabled = true; $('join-open').disabled = false
+    $('end').disabled = true; $('back').disabled = true; $('hide-keyboard').disabled = true; $('join-open').disabled = false
     $('hint').hidden = false; $('hint').textContent = 'Session over. Join again with a new code.'
   }
 }
@@ -215,6 +217,7 @@ canvas.addEventListener('keydown', event => {
 })
 
 $('back').addEventListener('click', () => sendInput('back', {}, 'Back'))
+$('hide-keyboard').addEventListener('click', () => sendInput('hideKeyboard', {}, 'Hide keyboard'))
 $('end').addEventListener('click', () => { if (ws) ws.send(JSON.stringify({ type: 'end' })) })
 $('join-open').addEventListener('click', () => { $('join-error').textContent = ''; $('join').showModal(); $('code').focus() })
 $('join-form').addEventListener('submit', event => {

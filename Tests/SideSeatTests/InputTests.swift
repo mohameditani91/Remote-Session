@@ -48,6 +48,17 @@ private final class SwipeableView: UIView, SideSeatSwipeable {
     }
 }
 
+private final class ResigningResponder: UIResponder {
+    var resigns = true
+    var focused = true
+    var calls = 0
+    override var isFirstResponder: Bool { focused }
+    override func resignFirstResponder() -> Bool {
+        calls += 1
+        return resigns
+    }
+}
+
 private final class KeyInputView: UIView, UIKeyInput {
     var typed = ""
     var hasText: Bool { !typed.isEmpty }
@@ -400,6 +411,20 @@ private final class InstantPopNavigation: UINavigationController {
         #expect(d.perform(.key(.return)) == .performed)
         #expect(field.typed == "a\n")
         #expect(dispatcher([]).perform(.text("x")) == .nothing("noFocusedField"))
+    }
+
+    @Test func hideKeyboardResignsTheFocusedField() {
+        let field = ResigningResponder()
+        var results: [InputResult] = []
+        results.append(dispatcher([], responder: field).perform(.hideKeyboard))
+        field.resigns = false
+        results.append(dispatcher([], responder: field).perform(.hideKeyboard))
+        field.focused = false
+        results.append(dispatcher([], responder: field).perform(.hideKeyboard))
+        results.append(dispatcher([]).perform(.hideKeyboard))
+
+        #expect(field.calls == 2)
+        #expect(results == [.performed, .nothing("keyboardStays"), .nothing("noKeyboard"), .nothing("noKeyboard")])
     }
 
     @Test func backPopsTheVisibleNavigationUnlessBackIsHidden() {

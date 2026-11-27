@@ -136,6 +136,9 @@ final class InputDispatcher {
             return press(key)
         case .back:
             return goBack()
+        case .hideKeyboard:
+            guard let responder = firstResponder(), responder.isFirstResponder else { return .nothing("noKeyboard") }
+            return responder.resignFirstResponder() ? .performed : .nothing("keyboardStays")
         }
     }
 
@@ -150,7 +153,7 @@ final class InputDispatcher {
             return sequence(first: hit.view, next: \.superview).lazy.compactMap(Self.describe).first
         case .text, .key:
             return (firstResponder() as? UIView).flatMap(Self.describe)
-        case .scroll, .back:
+        case .scroll, .back, .hideKeyboard:
             return nil
         }
     }

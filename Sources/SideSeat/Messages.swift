@@ -32,6 +32,7 @@ public enum RemoteInput: Equatable {
     case text(String)
     case key(RemoteKey)
     case back
+    case hideKeyboard
 }
 
 /// One agent input, as reported to `SideSeat.onInput`.
@@ -150,6 +151,8 @@ extension IncomingMessage {
             return .key(key)
         case "back":
             return .back
+        case "hideKeyboard":
+            return .hideKeyboard
         default:
             throw MessageError.malformed
         }

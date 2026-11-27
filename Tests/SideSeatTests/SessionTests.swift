@@ -159,7 +159,8 @@ final class FakeTransport: SideSeatTransport {
         #expect(try IncomingMessage(json: #"{"type":"input","id":"2","action":"key","key":"return"}"#) == .input(id: "2", .key(.return)))
         #expect(try IncomingMessage(json: #"{"type":"input","id":"3","action":"key","key":"backspace"}"#) == .input(id: "3", .key(.backspace)))
         #expect(try IncomingMessage(json: #"{"type":"input","id":"4","action":"text","text":"ab"}"#) == .input(id: "4", .text("ab")))
-        #expect(throws: MessageError.self) { try IncomingMessage(json: #"{"type":"input","id":"5","action":"swipe"}"#) }
+        #expect(try IncomingMessage(json: #"{"type":"input","id":"5","action":"hideKeyboard"}"#) == .input(id: "5", .hideKeyboard))
+        #expect(throws: MessageError.self) { try IncomingMessage(json: #"{"type":"input","id":"6","action":"swipe"}"#) }
     }
 
     @Test func framesRateDropsWhenCaptureIsSlowAndRecovers() {
