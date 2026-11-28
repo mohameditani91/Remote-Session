@@ -28,11 +28,20 @@ body:
       placeholder: 0.1.0
     validations:
       required: true
-  - type: input
-    id: ios
+  - type: dropdown
+    id: platform
     attributes:
-      label: iOS version and device
-      placeholder: iOS 18.1, iPhone 15 (or Simulator)
+      label: Platform
+      options:
+        - iOS
+        - Android
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: OS version and device
+      placeholder: iOS 18.1, iPhone 15 (or Simulator) / Android 15, Pixel 8 (or emulator)
     validations:
       required: true
   - type: dropdown
@@ -42,7 +51,9 @@ body:
       options:
         - UIKit
         - SwiftUI
-        - Both
+        - Android Views
+        - Jetpack Compose
+        - More than one
     validations:
       required: true
   - type: dropdown

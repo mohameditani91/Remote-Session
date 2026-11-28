@@ -1,0 +1,18 @@
+<resources>
+    <!-- Override any of these in your app's resources to translate or reword the built-in UI. -->
+    <string name="remotesession_connecting">Connecting…</string>
+    <string name="remotesession_code_title">Support code</string>
+    <string name="remotesession_code_message">Read this code to the support agent.</string>
+    <string name="remotesession_consent_title">Allow support?</string>
+    <string name="remotesession_consent_message">%1$s wants to see your screen.</string>
+    <string name="remotesession_allow_viewing">Allow viewing</string>
+    <string name="remotesession_allow_control">Allow viewing and control</string>
+    <string name="remotesession_deny">Deny</string>
+    <string name="remotesession_viewing">Support is viewing</string>
+    <string name="remotesession_controlling">Support is controlling</string>
+    <string name="remotesession_view_only">View only</string>
+    <string name="remotesession_end">End</string>
+    <string name="remotesession_cancel">Cancel</string>
+    <string name="remotesession_approval_title">Allow support to do this?</string>
+    <string name="remotesession_allow">Allow</string>
+</resources>
