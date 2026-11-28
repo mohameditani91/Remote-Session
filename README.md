@@ -1,13 +1,14 @@
 <h1 align="center">RemoteSession</h1>
 
 <p align="center">
-  <strong>In-app remote support for iOS.</strong><br>
+  <strong>In-app remote support for iOS and Android.</strong><br>
   See your user's screen and, with their consent, help them through it. No screen sharing app, no private APIs.
 </p>
 
 <p align="center">
   <a href="https://github.com/mohameditani91/Remote-Session/actions/workflows/ci.yml"><img src="https://github.com/mohameditani91/Remote-Session/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <img src="https://img.shields.io/badge/iOS-15%2B-blue" alt="iOS 15+">
+  <img src="https://img.shields.io/badge/Android-10%2B-green" alt="Android 10+">
   <img src="https://img.shields.io/badge/Swift-5.9-orange" alt="Swift 5.9">
   <img src="https://img.shields.io/badge/SPM-compatible-brightgreen" alt="Swift Package Manager">
   <img src="https://img.shields.io/badge/dependencies-none-lightgrey" alt="No dependencies">
@@ -22,12 +23,12 @@ A support agent opens a web page, types the 6-digit code shown in your app, and 
 
 ## Features
 
-- **App Store safe.** Public APIs only. No touch synthesis, no private selectors. Agent input is replayed the way UIKit itself would handle it: control actions, table and collection selection through their delegates, popovers closing through their delegates, scroll offsets, text input.
+- **Public APIs only.** On iOS that means App Store safe: no touch synthesis, no private selectors. Agent input is replayed the way UIKit itself would handle it: control actions, table and collection selection through their delegates, popovers closing through their delegates, scroll offsets, text input. On Android it's delivered as touch, wheel and key events to the app's own windows.
 - **Consent first.** Nothing streams until the user allows viewing, or viewing and control. The user can drop to view-only or end the session at any time from a banner they can drag out of the way, and an animated marker shows each tap the agent makes.
 - **Ask before it matters.** One call asks the user to allow an action the agent started, like deleting or paying, and lets it straight through when the user started it.
 - **Masking.** Secure text fields are always covered with a blurred placeholder. Mark anything else with one property, or mask whole screens with a rule.
-- **Video or stills.** Opt in to H.264 video from ReplayKit at up to 30 fps when the agent's browser can decode it, with JPEG stills otherwise.
-- **No dependencies.** About 2,800 lines of Swift. iOS 15+, UIKit and SwiftUI.
+- **Video or stills.** Opt in to H.264 video at up to 30 fps when the agent's browser can decode it, with JPEG stills otherwise. It comes from ReplayKit on iOS and from the app's own windows on Android.
+- **Small.** On iOS, about 2,800 lines of Swift with no dependencies, for iOS 15+ with UIKit and SwiftUI. On Android, about 2,400 lines of Kotlin with OkHttp as its one dependency, for Android 10+ with Views and Compose.
 - **Bring your own backend.** A small reference relay and agent console are included for local development. The transport is a protocol, so you can run sessions over your own infrastructure.
 
 ## See it in action
@@ -44,17 +45,17 @@ Over H.264 video, an agent opens a task, marks it done, sets the priority, types
 
 ## Try it in two minutes
 
-You need Node 18+ and Xcode 15+.
+You need Node 18+, and Xcode 15+ for iOS or Android Studio for Android.
 
 1. Start the relay and console:
    ```bash
    cd Examples/Relay && npm install && npm start
    ```
-2. Open `Examples/SampleApp/SampleApp.xcodeproj` and run it on a simulator.
+2. iOS: open `Examples/SampleApp/SampleApp.xcodeproj` and run it on a simulator. Android: open the `Android` folder in Android Studio and run `sample` on an emulator.
 3. In the sample app, open the **Support** tab and tap **Start support session**. A code appears.
 4. Open http://localhost:8080, enter the code and your name, and approve the request in the app.
 
-Click on the screen to tap, use the trackpad or wheel to scroll, and type with the console focused. To test on a real device, run the relay with `HOST=0.0.0.0` and point the sample app at your Mac's IP in the Support tab.
+Click on the screen to tap, use the trackpad or wheel to scroll, and type with the console focused. To test on a real device, run the relay with `HOST=0.0.0.0` and point the sample app at your Mac's IP in the Support tab. The Android emulator reaches your Mac at `10.0.2.2`, which the Android sample uses by default.
 
 ## Add it to your app
 
@@ -196,6 +197,45 @@ The relay in `Examples/Relay` is a starting point for development. It has an opt
 - With video, masks are applied to the recording after capture rather than while drawing. Keep JPEG for screens where that difference matters to you.
 - The drawn keyboard is a fixed US layout without Shift; the agent can type anything else from their own keyboard. Liquid Glass and other blur materials may render without their background.
 - One agent per session. If the connection drops, the session ends and the user starts a new one.
+
+## Android
+
+The Android library in [`Android/remotesession`](Android/remotesession) speaks the same protocol, so the relay and console work unchanged. It needs Android 10 (API 29) or later and works with Views and Compose. The sample app in [`Android/sample`](Android/sample) mirrors the iOS one: a Views task list and detail screen, and Compose profile and support screens.
+
+Its one dependency is OkHttp, for the WebSocket. It isn't published to Maven yet. Copy the `remotesession` folder into your project, add `include(":remotesession")` to `settings.gradle.kts`, and depend on it:
+
+```kotlin
+implementation(project(":remotesession"))
+```
+
+```kotlin
+import dev.remotesession.RemoteSession
+
+val configuration = RemoteSession.Configuration("wss://support.example.com/device").apply { video = true }
+RemoteSession.start(activity, configuration)
+```
+
+The API follows the iOS one: `end()`, `onStateChange`, `onInput`, `confirmAgentAction(...)`, `inputInterceptor`, `consentHandler` and `maskRule`. The built-in cards use string resources named `remotesession_*`, so you translate them like any other string.
+
+```kotlin
+pinView.isRemoteSessionMasked = true                                // a View
+Text(cardNumber, Modifier.remoteSessionMasked())                    // a composable
+configuration.maskRule = MaskRules.activities(PaymentActivity::class) // whole screens
+```
+
+How it differs from iOS:
+
+- **Frames come from the app's own windows**: activities, dialogs, popups and menus. They're drawn on the render thread, so nothing outside the app is ever captured: no status bar, no notifications, no other apps.
+- **Video needs no prompt.** With `video = true` those same masked frames are encoded to H.264 with `MediaCodec`, so there is no screen recording, no system dialog and no foreground service.
+- **Input reaches Views and Compose alike.** Taps are touch events sent to the window under the point, scrolls are mouse-wheel events, and text goes into the focused field. Compose needs no markers.
+- **Password fields are always masked.** That covers `EditText` with a password input type, and Compose fields with a password transformation, found through Compose's semantics tree.
+- **Back at the root returns `nothingToGoBack`** instead of closing the app.
+
+Limitations:
+
+- **Tested on one device so far,** an API 37 emulator. Video's cost to the app's frame rate on real hardware isn't measured yet.
+- **Predictive back.** A dialog that only handles predictive back may ignore the agent's Back.
+- **Lint warnings.** Compose is read through `ViewRootForTest`, a public interface meant for tests, so lint may warn about it.
 
 ## Security
 
