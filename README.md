@@ -202,6 +202,16 @@ The relay in `Examples/Relay` is a starting point for development. It has an opt
 
 The Android library in [`Android/remotesession`](Android/remotesession) speaks the same protocol, so the relay and console work unchanged. It needs Android 10 (API 29) or later and works with Views and Compose. The sample app in [`Android/sample`](Android/sample) mirrors the iOS one: a Views task list and detail screen, and Compose profile and support screens.
 
+Over H.264 video, an agent opens a task, marks it done, sets the priority, types a comment with the drawn keyboard showing, and saves. Then they try to open the recovery key: the user is asked first, allows it on the device, and the screen reaches the agent masked.
+
+<p align="center">
+  <img src="docs/android-demo.gif" alt="An agent driving the Android sample app from the web console over video, with an approval prompt and a masked screen" width="900">
+</p>
+
+| Pairing and consent | What the user sees vs. what the agent sees |
+| :---: | :---: |
+| <img src="docs/android-consent.jpg" alt="Support code and consent prompt on Android" width="420"> | <img src="docs/android-masking.jpg" alt="Android Profile screen on the device next to the agent's view with the PIN and recovery key masked" width="420"> |
+
 Its one dependency is OkHttp, for the WebSocket. It isn't published to Maven yet. Copy the `remotesession` folder into your project, add `include(":remotesession")` to `settings.gradle.kts`, and depend on it:
 
 ```kotlin
