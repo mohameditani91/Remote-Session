@@ -237,6 +237,17 @@ Limitations:
 - **Predictive back.** A dialog that only handles predictive back may ignore the agent's Back.
 - **Lint warnings.** Compose is read through `ViewRootForTest`, a public interface meant for tests, so lint may warn about it.
 
+## Repository layout
+
+| Path | What it is |
+| --- | --- |
+| [`Sources/RemoteSession`](Sources/RemoteSession), [`Tests/RemoteSessionTests`](Tests/RemoteSessionTests) | The iOS library, a Swift package, and its tests |
+| [`Examples/SampleApp`](Examples/SampleApp) | The iOS sample app. `project.yml` generates its Xcode project with XcodeGen |
+| [`Android/remotesession`](Android/remotesession) | The Android library and its tests |
+| [`Android/sample`](Android/sample) | The Android sample app, in the same Gradle build as the library |
+| [`Examples/Relay`](Examples/Relay) | The reference relay and agent console, used by both platforms |
+| [`docs`](docs) | Images for this README |
+
 ## Security
 
 To report a vulnerability, follow [SECURITY.md](SECURITY.md). Please don't open a public issue.
